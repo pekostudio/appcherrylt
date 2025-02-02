@@ -65,7 +65,6 @@ class OfflinePlaylistsPageState extends State<OfflinePlaylistsPage> {
   Future<void> _removeOfflinePlaylist(int playlistId) async {
     try {
       await OfflinePlaylistData.removeOfflinePlaylist(playlistId);
-      await OfflinePlaylistData.deletePlaylistFiles(playlistId);
       setState(() {
         offlinePlaylists
             .removeWhere((playlist) => playlist['id'] == playlistId);
