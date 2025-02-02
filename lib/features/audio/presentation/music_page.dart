@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:appcherrylt/core/models/favourites.dart';
 import 'package:appcherrylt/core/models/get_tracks.dart';
@@ -17,7 +18,7 @@ import 'package:provider/provider.dart';
 import 'package:appcherrylt/features/audio/presentation/music_page_helpers.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'dart:async';
+import 'package:appcherrylt/features/offline/presentation/offline.dart';
 
 class MusicPage extends StatefulWidget {
   final int id;
@@ -205,6 +206,16 @@ class MusicPageState extends State<MusicPage> {
         await file.create(recursive: true);
         await file.writeAsBytes(response.bodyBytes);
         logger.d('Cover image downloaded and saved to $filePath');
+
+        // First save the local file path
+        await OfflinePlaylistData.markPlaylistAsOffline(
+            playlistId, widget.title, filePath); // Local path first
+
+        if (context.mounted) {
+          final offlinePage =
+              context.findAncestorStateOfType<OfflinePlaylistsPageState>();
+          offlinePage?.refreshAfterDownload();
+        }
       } else {
         logger.e(
             'Failed to download cover image. Status code: ${response.statusCode}');
@@ -395,9 +406,6 @@ class MusicPageState extends State<MusicPage> {
                                                 selectedCount,
                                                 widget.id,
                                               );
-                                              await OfflinePlaylistData
-                                                  .markPlaylistAsOffline(
-                                                      widget.id);
                                               await _downloadCoverImage(
                                                   widget.cover, widget.id);
                                               logger.d(

@@ -9,13 +9,32 @@ class OfflinePlaylistData {
   static const String _offlinePlaylistsKey = 'offline_playlists';
   static final Logger logger = Logger();
 
-  static Future<void> markPlaylistAsOffline(int playlistId) async {
+  static Future<void> markPlaylistAsOffline(
+      int playlistId, String name, String coverPath) async {
+    logger.d(
+        'Marking playlist as offline - ID: $playlistId, Name: $name, Cover: $coverPath');
     final prefs = await SharedPreferences.getInstance();
     final offlinePlaylists = prefs.getStringList(_offlinePlaylistsKey) ?? [];
+
+    // Add to offline playlists list if not already there
     if (!offlinePlaylists.contains(playlistId.toString())) {
       offlinePlaylists.add(playlistId.toString());
       await prefs.setStringList(_offlinePlaylistsKey, offlinePlaylists);
     }
+
+    // Store name
+    await prefs.setString('playlist_name_$playlistId', name);
+
+    // Only store cover path if it's a local file path (not a URL)
+    if (!coverPath.startsWith('http')) {
+      await prefs.setString('playlist_cover_$playlistId', coverPath);
+      logger.d('Stored local cover path: $coverPath');
+    } else {
+      logger.d('Skipping URL cover path storage: $coverPath');
+    }
+
+    logger.d(
+        'Playlist metadata stored - Name: ${prefs.getString('playlist_name_$playlistId')}, Cover: ${prefs.getString('playlist_cover_$playlistId')}');
   }
 
   static Future<List<int>> getOfflinePlaylists() async {
@@ -28,11 +47,22 @@ class OfflinePlaylistData {
   }
 
   static Future<String?> getCoverImagePath(int playlistId) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final filePath = '${directory.path}/$playlistId/cover.jpg';
-    final file = File(filePath);
-    if (await file.exists()) {
-      return filePath;
+    final prefs = await SharedPreferences.getInstance();
+    final coverPath = prefs.getString('playlist_cover_$playlistId');
+    logger.d('Getting cover path for playlist $playlistId: $coverPath');
+
+    if (coverPath != null) {
+      final file = File(coverPath);
+      final exists = await file.exists();
+      logger.d('Cover file exists: $exists for path: $coverPath');
+      if (exists) {
+        return coverPath;
+      } else {
+        logger.d('Cover file does not exist at path: $coverPath');
+      }
+    } else {
+      logger.d(
+          'No cover path stored in SharedPreferences for playlist $playlistId');
     }
     return null;
   }
@@ -45,7 +75,8 @@ class OfflinePlaylistData {
     }
   }
 
-  static Future<List<dynamic>> getOfflineTracks(int playlistId) async {
+  static Future<List<Map<String, dynamic>>> getOfflineTracks(
+      int playlistId) async {
     final directory = await getApplicationDocumentsDirectory();
     final playlistDirectory = Directory('${directory.path}/$playlistId');
 
@@ -53,7 +84,7 @@ class OfflinePlaylistData {
       return [];
     }
 
-    List<dynamic> tracks = [];
+    List<Map<String, dynamic>> tracks = [];
     await for (var entity in playlistDirectory.list()) {
       if (entity is File && entity.path.endsWith('.mp3')) {
         final fileName = path.basename(entity.path);
@@ -75,21 +106,53 @@ class OfflinePlaylistData {
   // Download cover image
   Future<void> downloadCoverImage(String url, int playlistId) async {
     try {
-      logger.d('Starting download of cover image from $url');
+      logger.d(
+          'Starting download of cover image from $url for playlist $playlistId');
+
+      // Validate URL
+      if (url.isEmpty) {
+        logger.e('Empty URL provided for cover image download');
+        return;
+      }
+
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         final directory = await getApplicationDocumentsDirectory();
-        final filePath = path.join(directory.path, '$playlistId', 'cover.jpg');
+        final playlistDir = Directory('${directory.path}/$playlistId');
+        final filePath = path.join(playlistDir.path, 'cover.jpg');
+
+        // Ensure directory exists
+        if (!await playlistDir.exists()) {
+          await playlistDir.create(recursive: true);
+          logger.d('Created playlist directory: ${playlistDir.path}');
+        }
+
+        // Save the file
         final file = File(filePath);
-        await file.create(recursive: true);
         await file.writeAsBytes(response.bodyBytes);
-        logger.d('Cover image downloaded and saved to $filePath');
+
+        // Verify file was written
+        if (await file.exists()) {
+          logger.d('Cover image downloaded and saved to $filePath');
+          logger.d('File size: ${await file.length()} bytes');
+
+          // Save the cover image path in SharedPreferences
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('playlist_cover_$playlistId', filePath);
+
+          // Verify SharedPreferences was updated
+          final savedPath = prefs.getString('playlist_cover_$playlistId');
+          logger.d('Verified cover path in SharedPreferences: $savedPath');
+        } else {
+          logger.e('File was not created after write attempt');
+        }
       } else {
         logger.e(
             'Failed to download cover image. Status code: ${response.statusCode}');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       logger.e('Error downloading cover image: $e');
+      logger.e('Stack trace: $stackTrace');
     }
   }
 
@@ -120,6 +183,24 @@ class OfflinePlaylistData {
       }
     } else {
       logger.d('Playlist directory does not exist: ${playlistDirectory.path}');
+    }
+  }
+
+  static Future<String?> getPlaylistName(int playlistId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('playlist_name_$playlistId');
+  }
+
+  static Future<void> verifyAndCleanupCoverPath(int playlistId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final coverPath = prefs.getString('playlist_cover_$playlistId');
+
+    if (coverPath != null) {
+      final file = File(coverPath);
+      if (!await file.exists()) {
+        logger.d('Removing invalid cover path for playlist $playlistId');
+        await prefs.remove('playlist_cover_$playlistId');
+      }
     }
   }
 }

@@ -693,6 +693,33 @@ class AudioProvider extends ChangeNotifier {
       rethrow;
     }
   }
+
+  Future<void> setOfflinePlaylist(List<Map<String, dynamic>> tracks) async {
+    try {
+      // Initialize audio source with local files
+      await initializeAudioSource();
+      final audioSources = tracks.map((track) {
+        return AudioSource.uri(Uri.file(track['filePath']));
+      }).toList();
+
+      // Clear previous playlist if any
+      if (_playlist.length > 0) {
+        await _playlist.clear();
+      }
+
+      // Add loaded tracks to the playlist
+      if (audioSources.isNotEmpty) {
+        await _playlist.addAll(audioSources);
+        // Set the playlist but do not start playback yet
+        await _player.setAudioSource(_playlist,
+            initialIndex: 0, initialPosition: Duration.zero);
+      }
+
+      notifyListeners();
+    } catch (e) {
+      logger.e('Error setting offline playlist: $e');
+    }
+  }
 }
 
 class PositionData {
