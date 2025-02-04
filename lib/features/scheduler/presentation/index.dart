@@ -29,6 +29,12 @@ class SchedulerPageState extends State<SchedulerPage> {
   void initState() {
     super.initState();
 
+    // Stop any playing audio when scheduler page is opened
+    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+    if (audioProvider.isPlaying) {
+      audioProvider.stop();
+    }
+
     // Start periodic check for playlist end
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
       if (!mounted) {
@@ -52,8 +58,7 @@ class SchedulerPageState extends State<SchedulerPage> {
 
     try {
       // Check if current playlist should stop
-      if (schedulerProvider.shouldStopCurrentPlaylist() &&
-          audioProvider.isPlaying) {
+      if (schedulerProvider.shouldStopCurrentPlaylist()) {
         logger.d('Stopping scheduled playlist as it has ended');
 
         // Stop the audio
@@ -62,24 +67,14 @@ class SchedulerPageState extends State<SchedulerPage> {
         // Reset navigation flag if needed
         _hasRedirected = false;
 
-        // Check for next scheduled playlist
-        final nextPlaylist = schedulerProvider.getNextScheduledPlaylist();
-        if (nextPlaylist?.playlist != null) {
-          logger.d(
-              'Starting next scheduled playlist: ${nextPlaylist!.playlistName}');
-          if (mounted) {
-            _navigateToMusicPage(nextPlaylist.playlist!, isScheduled: true);
-          }
-        } else {
-          // Show message to user
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Scheduled playlist has ended'),
-                duration: Duration(seconds: 3),
-              ),
-            );
-          }
+        // Show message to user
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Scheduled playlist has ended'),
+              duration: Duration(seconds: 3),
+            ),
+          );
         }
       }
     } catch (e) {
