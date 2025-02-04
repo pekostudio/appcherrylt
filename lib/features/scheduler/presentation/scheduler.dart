@@ -1,4 +1,5 @@
 import 'package:appcherrylt/api/api.dart';
+import 'package:appcherrylt/core/providers/audio_provider.dart';
 import 'package:appcherrylt/features/scheduler/data/get_scheduler.dart';
 import 'package:appcherrylt/core/models/user_session.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +22,7 @@ class ScheduleScreenState extends State<ScheduleScreen> {
     super.initState();
     String accessToken =
         Provider.of<UserSession>(context, listen: false).globalToken;
+    Provider.of<AudioProvider>(context, listen: false).stop();
     _scheduleFuture = API().getSchedule(accessToken);
   }
 

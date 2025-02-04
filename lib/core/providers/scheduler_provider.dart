@@ -33,24 +33,29 @@ class SchedulerProvider extends ChangeNotifier {
 
   // Get today's schedule with caching
   List<ScheduleItem> _getTodaySchedule() {
-    final now = DateTime.now();
+    try {
+      final now = DateTime.now();
 
-    // Always invalidate cache if it's from a different day
-    if (_todayScheduleCacheDate?.day != now.day) {
-      _invalidateCache();
-    }
+      // Always invalidate cache if it's from a different day
+      if (_todayScheduleCacheDate?.day != now.day) {
+        _invalidateCache();
+      }
 
-    if (_todayScheduleCache != null) {
+      if (_todayScheduleCache != null) {
+        return _todayScheduleCache!;
+      }
+
+      _todayScheduleCache =
+          _schedule?.list?.where((item) => item.day == now.weekday).toList() ??
+              [];
+      _todayScheduleCacheDate = now;
+      _logger.d(
+          'Today schedule cache updated with ${_todayScheduleCache!.length} items');
       return _todayScheduleCache!;
+    } catch (e) {
+      _logger.e('Error getting today schedule: $e');
+      return [];
     }
-
-    _todayScheduleCache =
-        _schedule?.list?.where((item) => item.day == now.weekday).toList() ??
-            [];
-    _todayScheduleCacheDate = now;
-    _logger.d(
-        'Today schedule cache updated with ${_todayScheduleCache!.length} items');
-    return _todayScheduleCache!;
   }
 
   // Get schedule status
@@ -68,10 +73,22 @@ class SchedulerProvider extends ChangeNotifier {
 
   // Get current playing schedule
   ScheduleItem? getCurrentPlayingSchedule() {
-    return todaySchedule.firstWhere(
-      (schedule) => getScheduleStatus(schedule) == ScheduleStatus.playing,
-      orElse: () => ScheduleItem(),
-    );
+    try {
+      final now = DateTime.now();
+      final currentTime = DateFormat('HH:mm').format(now);
+
+      return todaySchedule.firstWhere(
+        (schedule) =>
+            schedule.start != null &&
+            schedule.end != null &&
+            schedule.start!.compareTo(currentTime) <= 0 &&
+            schedule.end!.compareTo(currentTime) > 0,
+        orElse: () => ScheduleItem(),
+      );
+    } catch (e) {
+      _logger.e('Error getting current playing schedule: $e');
+      return null;
+    }
   }
 
   // Check if schedule is active
@@ -179,6 +196,51 @@ class SchedulerProvider extends ChangeNotifier {
   void _invalidateCache() {
     _todayScheduleCache = null;
     _todayScheduleCacheDate = null;
+  }
+
+  // Add this method to check if current playlist should stop
+  bool shouldStopCurrentPlaylist() {
+    try {
+      final now = DateTime.now();
+      final currentTime = DateFormat('HH:mm').format(now);
+
+      // Get currently playing schedule
+      final currentSchedule = getCurrentPlayingSchedule();
+      if (currentSchedule?.end == null) return false;
+
+      // Check if we've passed the end time
+      final shouldStop = currentTime.compareTo(currentSchedule!.end!) >= 0;
+      _logger.d(
+          'Checking if should stop playlist: $shouldStop (Current: $currentTime, End: ${currentSchedule.end})');
+
+      return shouldStop;
+    } catch (e) {
+      _logger.e('Error checking if playlist should stop: $e');
+      return false;
+    }
+  }
+
+  // Get next scheduled playlist that should start now
+  ScheduleItem? getNextScheduledPlaylist() {
+    try {
+      final now = DateTime.now();
+      final currentTime = DateFormat('HH:mm').format(now);
+
+      return todaySchedule.firstWhere(
+        (schedule) =>
+            schedule.start != null &&
+            schedule.end != null &&
+            schedule.start!.compareTo(currentTime) <=
+                0 && // Should have started
+            schedule.end!.compareTo(currentTime) > 0 && // Hasn't ended yet
+            getScheduleStatus(schedule) ==
+                ScheduleStatus.playing, // Is currently active
+        orElse: () => ScheduleItem(),
+      );
+    } catch (e) {
+      _logger.e('Error getting next scheduled playlist: $e');
+      return null;
+    }
   }
 
   @override

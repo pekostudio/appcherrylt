@@ -25,6 +25,68 @@ class SchedulerPageState extends State<SchedulerPage> {
   Timer? _refreshTimer;
   bool _hasRedirected = false;
 
+  @override
+  void initState() {
+    super.initState();
+
+    // Start periodic check for playlist end
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      await _refreshScheduleData();
+      _checkPlaylistEnd();
+    });
+
+    // Initial check
+    _checkPlaylistEnd();
+  }
+
+  void _checkPlaylistEnd() {
+    if (!mounted) return;
+
+    final schedulerProvider =
+        Provider.of<SchedulerProvider>(context, listen: false);
+    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+
+    try {
+      // Check if current playlist should stop
+      if (schedulerProvider.shouldStopCurrentPlaylist() &&
+          audioProvider.isPlaying) {
+        logger.d('Stopping scheduled playlist as it has ended');
+
+        // Stop the audio
+        audioProvider.stop();
+
+        // Reset navigation flag if needed
+        _hasRedirected = false;
+
+        // Check for next scheduled playlist
+        final nextPlaylist = schedulerProvider.getNextScheduledPlaylist();
+        if (nextPlaylist?.playlist != null) {
+          logger.d(
+              'Starting next scheduled playlist: ${nextPlaylist!.playlistName}');
+          if (mounted) {
+            _navigateToMusicPage(nextPlaylist.playlist!, isScheduled: true);
+          }
+        } else {
+          // Show message to user
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Scheduled playlist has ended'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      logger.e('Error checking playlist end: $e');
+    }
+  }
+
   Future<void> _refreshScheduleData() async {
     if (!mounted) return;
 
@@ -40,13 +102,16 @@ class SchedulerPageState extends State<SchedulerPage> {
 
       // Check if we need to start a new scheduled playlist
       final activeSchedule = getSchedule.getActiveSchedule();
-      if (activeSchedule != null &&
+      if (activeSchedule?.playlist != null &&
           (!audioProvider.isPlaying ||
-              audioProvider.playlistId != activeSchedule.playlist)) {
+              audioProvider.playlistId != activeSchedule?.playlist)) {
         if (mounted) {
-          _navigateToMusicPage(activeSchedule.playlist, isScheduled: true);
+          _navigateToMusicPage(activeSchedule!.playlist!, isScheduled: true);
         }
       }
+
+      // Check if current playlist should stop
+      _checkPlaylistEnd();
 
       if (mounted) {
         setState(() {});
@@ -56,30 +121,6 @@ class SchedulerPageState extends State<SchedulerPage> {
     } catch (e) {
       logger.e('Error refreshing schedule data: $e');
     }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final audioProvider = Provider.of<AudioProvider>(context, listen: false);
-      final getSchedule = Provider.of<GetSchedule>(context, listen: false);
-      final schedulerProvider =
-          Provider.of<SchedulerProvider>(context, listen: false);
-
-      audioProvider.stop();
-      schedulerProvider.setSchedule(getSchedule);
-
-      // Initial refresh
-      _refreshScheduleData();
-
-      // Set up periodic refresh every minute
-      _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-        _refreshScheduleData();
-      });
-
-      schedulerProvider.setNavigatingToScheduledPlaylist(false);
-    });
   }
 
   @override
@@ -125,11 +166,12 @@ class SchedulerPageState extends State<SchedulerPage> {
     final currentPlayingSchedule =
         schedulerProvider.getCurrentPlayingSchedule();
 
-    if (currentPlayingSchedule?.playlist != null &&
+    if (currentPlayingSchedule != null &&
+        currentPlayingSchedule.playlist != null &&
         !schedulerProvider.isNavigatingToScheduledPlaylist) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         schedulerProvider.setNavigatingToScheduledPlaylist(true);
-        _navigateToMusicPage(currentPlayingSchedule!.playlist,
+        _navigateToMusicPage(currentPlayingSchedule.playlist!,
             isScheduled: true);
       });
       return const SizedBox.shrink();
