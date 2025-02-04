@@ -65,6 +65,7 @@ class IndexPageState extends State<IndexPage> with RouteAware {
     logger.d('Initializing IndexPage');
 
     try {
+      // Set initial loading state
       setState(() {
         _isLoading = true;
         displayPlaylistsAndFavorites = false;
@@ -74,45 +75,32 @@ class IndexPageState extends State<IndexPage> with RouteAware {
       await getSchedule.fetchSchedulerData(userSession.globalToken);
       schedulerProvider.setSchedule(getSchedule);
 
-      // Check if we have schedules for today
+      // Check if we have any schedules for today (active, upcoming, or completed)
       final hasScheduledPlaylistsToday =
           schedulerProvider.hasScheduledPlaylistsToday();
-      final hasActiveSchedule = getSchedule.getActiveSchedule() != null;
-
       logger.d('Has scheduled playlists today: $hasScheduledPlaylistsToday');
-      logger.d('Has active schedule: $hasActiveSchedule');
 
-      // Always start the periodic timer if we have schedules for today
-      if (hasScheduledPlaylistsToday) {
-        _startPeriodicTimer();
-
-        if (hasActiveSchedule && !_hasRedirected) {
-          // If we have active schedule, navigate to scheduler page
-          _hasRedirected = true;
+      // Redirect to scheduler page if there are any schedules for today
+      if (hasScheduledPlaylistsToday && !_hasRedirected) {
+        _hasRedirected = true;
+        if (mounted) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const SchedulerPage()),
           );
-          return;
-        }
-
-        // If we have schedules but none are active, show message
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            displayPlaylistsAndFavorites = false; // Don't show playlists
-          });
         }
         return;
       }
 
-      // If no schedules for today, load and show playlists
+      // If no schedules, load playlists and show home page
       if (shouldLoadPlaylistsAndFavorites) {
         await getPlaylists.fetchTracks(
             userSession.globalToken, favoriteManager);
       }
 
+      // Start periodic checks only if we're staying on this page
       if (mounted) {
+        _startPeriodicTimer();
         setState(() {
           _isLoading = false;
           displayPlaylistsAndFavorites = true;
@@ -131,46 +119,54 @@ class IndexPageState extends State<IndexPage> with RouteAware {
 
   void _startPeriodicTimer() {
     _periodicTimer?.cancel();
-    _periodicTimer = Timer.periodic(const Duration(minutes: 1), (_) async {
-      if (!mounted) return;
 
-      final getSchedule = Provider.of<GetSchedule>(context, listen: false);
-      final schedulerProvider =
-          Provider.of<SchedulerProvider>(context, listen: false);
-      final audioProvider = Provider.of<AudioProvider>(context, listen: false);
-
-      // Check if we have schedules for today
-      final hasScheduledPlaylistsToday =
-          schedulerProvider.hasScheduledPlaylistsToday();
-      final hasActiveSchedule = getSchedule.getActiveSchedule() != null;
-
-      logger.d(
-          'Periodic check - Has scheduled playlists today: $hasScheduledPlaylistsToday');
-      logger.d('Periodic check - Has active schedule: $hasActiveSchedule');
-
-      if (hasScheduledPlaylistsToday) {
-        if (hasActiveSchedule && !_hasRedirected) {
-          // Stop any current playback before navigating
-          await audioProvider.reset();
-
-          _hasRedirected = true;
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const SchedulerPage()),
-            );
-          }
-        } else {
-          setState(() {
-            displayPlaylistsAndFavorites = false;
-          });
-        }
-      } else {
-        setState(() {
-          displayPlaylistsAndFavorites = true;
-        });
+    _periodicTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
       }
+      await _checkSchedule();
     });
+  }
+
+  Future<void> _checkSchedule() async {
+    if (!mounted) return;
+
+    final userSession = Provider.of<UserSession>(context, listen: false);
+    final getSchedule = Provider.of<GetSchedule>(context, listen: false);
+    final schedulerProvider =
+        Provider.of<SchedulerProvider>(context, listen: false);
+
+    try {
+      await getSchedule.fetchSchedulerData(userSession.globalToken);
+      schedulerProvider.setSchedule(getSchedule);
+
+      // Handle ads
+      final currentAd = schedulerProvider.getCurrentAd();
+      if (currentAd?.tracks?.isNotEmpty == true) {
+        final adsProvider = Provider.of<AdsProvider>(context, listen: false);
+        adsProvider.setContext(context);
+        try {
+          adsProvider.createAdsSource(currentAd!.tracks!.first.toString());
+        } catch (e) {
+          logger.e('Error creating ad source: $e');
+        }
+      }
+
+      // Check for any schedules today (active, upcoming, or completed)
+      final hasSchedules = schedulerProvider.hasScheduledPlaylistsToday();
+      if (hasSchedules && !_hasRedirected) {
+        _hasRedirected = true;
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const SchedulerPage()),
+          );
+        }
+      }
+    } catch (e) {
+      logger.e('Error checking schedule: $e');
+    }
   }
 
   Future<void> ensurePlaylistsLoaded(String accessToken) async {
@@ -353,9 +349,8 @@ class IndexPageState extends State<IndexPage> with RouteAware {
 
     final audioProvider = Provider.of<AudioProvider>(context);
     final getPlaylists = Provider.of<GetPlaylists>(context);
-    final schedulerProvider = Provider.of<SchedulerProvider>(context);
 
-    bool isPlaying = audioProvider.isPlaying;
+    bool isPlaying = audioProvider.isPlaying; // Replace with actual property
     bool isPaused = audioProvider.isPaused;
 
     return Scaffold(
@@ -364,29 +359,17 @@ class IndexPageState extends State<IndexPage> with RouteAware {
         child: const CherryTopNavigation(),
       ),
       body: SingleChildScrollView(
-        child: !displayPlaylistsAndFavorites &&
-                schedulerProvider.hasScheduledPlaylistsToday()
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Text(
-                    'At the moment there is nothing to play. You have scheduled playlists for today',
-                    style: Theme.of(context).textTheme.titleLarge,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              )
-            : Column(
-                children: [
-                  if (displayPlaylistsAndFavorites) ...[
-                    FavoritePlaylists(getPlaylists: getPlaylists),
-                    ...?getPlaylists.playlistsCategoryId?.map(
-                      (categoryId) =>
-                          buildCategoryPlaylists(categoryId, getPlaylists),
-                    ),
-                  ],
-                ],
+        child: Column(
+          children: [
+            if (displayPlaylistsAndFavorites) ...[
+              FavoritePlaylists(getPlaylists: getPlaylists),
+              ...?getPlaylists.playlistsCategoryId?.map(
+                (categoryId) =>
+                    buildCategoryPlaylists(categoryId, getPlaylists),
               ),
+            ],
+          ],
+        ),
       ),
       bottomNavigationBar:
           (isPlaying || isPaused) ? const AudioPlayerWidget() : null,

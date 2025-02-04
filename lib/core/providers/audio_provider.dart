@@ -29,7 +29,7 @@ class MyJABytesSource extends StreamAudioSource {
 }
 
 class AudioProvider extends ChangeNotifier {
-  AudioPlayer _player = AudioPlayer(
+  final AudioPlayer _player = AudioPlayer(
     handleInterruptions: true,
     androidApplyAudioAttributes: true,
     androidOffloadSchedulingEnabled: true,
@@ -644,48 +644,44 @@ class AudioProvider extends ChangeNotifier {
   Future<void> reset() async {
     logger.d('Resetting audio provider state');
     try {
-      // Stop current playback
-      if (_player.playing) {
-        await _player.stop();
-      }
-
-      // Reset state
-      _isPlaying = false;
-      _isPaused = false;
-      _currentSongName = null;
-      _currentPlaylistId = null;
-      _currentPlaylistTitle = null;
-      _currentPlaylistCover = null;
-      _currentPlayingSongName = '';
-      _currentTrackIndex = 0;
-      _tracks = [];
-      _isInitialLoad = true;
-      _isScheduled = false;
-
-      // Update global audio state if context is available
-      if (_context != null) {
-        try {
-          final globalAudioState =
-              Provider.of<GlobalAudioState>(_context!, listen: false);
-          globalAudioState.updateAudioState(
-            false, // isPlaying
-            "", // songName
-            0, // playlistId
-            "", // title
-            "", // cover
-          );
-        } catch (e) {
-          logger.e('Error updating global audio state during reset: $e');
+      // Don't stop playback if something is playing
+      if (!_isPlaying && !_isPaused) {
+        if (_player.playing) {
+          await _player.stop();
         }
-      }
 
-      // Dispose and recreate the audio player to ensure clean state
-      await _player.dispose();
-      _player = AudioPlayer(
-        handleInterruptions: true,
-        androidApplyAudioAttributes: true,
-        androidOffloadSchedulingEnabled: true,
-      );
+        // Only reset state if nothing is playing
+        _isPlaying = false;
+        _isPaused = false;
+        _currentSongName = null;
+        _currentPlaylistId = null;
+        _currentPlaylistTitle = null;
+        _currentPlaylistCover = null;
+        _currentPlayingSongName = '';
+        _currentTrackIndex = 0;
+        _tracks = [];
+        _isInitialLoad = true;
+
+        // Update global audio state if context is available
+        if (_context != null) {
+          try {
+            final globalAudioState =
+                Provider.of<GlobalAudioState>(_context!, listen: false);
+            globalAudioState.updateAudioState(
+              false, // isPlaying
+              "", // songName
+              0, // playlistId
+              "", // title
+              "", // cover
+            );
+          } catch (e) {
+            logger.e('Error updating global audio state during reset: $e');
+          }
+        }
+
+        // Reinitialize audio source only if we're actually resetting
+        await initializeAudioSource();
+      }
 
       notifyListeners();
       logger.d('Audio provider state reset successfully');

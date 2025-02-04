@@ -1,3 +1,4 @@
+import 'package:appcherrylt/core/state/global_audio_state.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../features/scheduler/data/get_scheduler.dart';
@@ -162,18 +163,16 @@ class SchedulerProvider extends ChangeNotifier {
 
   // Check if there are schedules for today
   bool hasScheduledPlaylistsToday() {
-    final hasSchedules = todaySchedule.isNotEmpty;
-    final currentTime = DateFormat('HH:mm').format(DateTime.now());
+    final now = DateTime.now();
+    final currentDay = now.weekday;
 
-    // Check if any schedule is currently active or upcoming
-    final hasActiveOrUpcoming = todaySchedule.any((schedule) {
-      return schedule.end!.compareTo(currentTime) >
-          0; // Schedule hasn't ended yet
-    });
+    // Check if there are any playlists scheduled for today, regardless of time
+    final hasSchedules =
+        todaySchedule.any((schedule) => schedule.day == currentDay);
 
-    _logger.d(
-        'Has scheduled playlists today: $hasSchedules, active/upcoming: $hasActiveOrUpcoming');
-    return hasSchedules && hasActiveOrUpcoming;
+    logger.d('Has scheduled playlists today: $hasSchedules');
+
+    return hasSchedules;
   }
 
   // Invalidate cache

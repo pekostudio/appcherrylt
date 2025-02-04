@@ -96,16 +96,14 @@ class GetSchedule extends ChangeNotifier {
     int currentDay = now.weekday;
     String currentTime = DateFormat('HH:mm').format(now);
 
-    try {
-      return list?.firstWhere(
-        (schedule) =>
-            schedule.day == currentDay &&
-            schedule.start!.compareTo(currentTime) <= 0 &&
-            schedule.end!.compareTo(currentTime) > 0,
-      );
-    } catch (e) {
-      return null;
-    }
+    return list?.firstWhere(
+      (schedule) =>
+          schedule.day == currentDay &&
+          schedule.start!.compareTo(currentTime) <= 0 &&
+          schedule.end!.compareTo(currentTime) >
+              0, // Changed >= to > for end time
+      orElse: () => null as ScheduleItem,
+    );
   }
 
   ScheduleItem? getNextSchedule() {
@@ -118,13 +116,10 @@ class GetSchedule extends ChangeNotifier {
         .toList()
       ?..sort((a, b) => a.start!.compareTo(b.start!));
 
-    try {
-      return todaySchedules?.firstWhere(
-        (schedule) => schedule.start!.compareTo(currentTime) > 0,
-      );
-    } catch (e) {
-      return null;
-    }
+    return todaySchedules?.firstWhere(
+      (schedule) => schedule.start!.compareTo(currentTime) > 0,
+      orElse: () => null as ScheduleItem,
+    );
   }
 }
 
