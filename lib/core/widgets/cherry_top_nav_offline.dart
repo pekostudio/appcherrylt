@@ -36,7 +36,8 @@ class CherryTopNavigationOfflineState
       width: double.infinity,
       height: 160.0, // Ensure it includes space for both Rows
       child: DecoratedBox(
-        decoration: BoxDecoration(color: Colors.white),
+        decoration:
+            BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor),
         child: Column(
           children: [
             SizedBox(
