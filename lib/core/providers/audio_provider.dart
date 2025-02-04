@@ -71,6 +71,10 @@ class AudioProvider extends ChangeNotifier {
     children: [],
   );
 
+  bool _isScheduled = false;
+
+  bool get isScheduled => _isScheduled;
+
   AudioProvider(BuildContext context) {
     _context = context; // Save the context
     _player.playerStateStream.listen((state) {
@@ -517,18 +521,11 @@ class AudioProvider extends ChangeNotifier {
 
   void setPlaylistDetails(int id, String title, String cover,
       {bool isScheduled = false}) {
-    if (_playlistId != id ||
-        _playlistTitle != title ||
-        _playlistCover != cover ||
-        _isScheduledPlaylist != isScheduled) {
-      _playlistId = id;
-      _playlistTitle = title;
-      _playlistCover = cover;
-      _isScheduledPlaylist = isScheduled;
-      logger.d(
-          "Playlist details set: id=$id, title=$title, cover=$cover, isScheduled=$isScheduled");
-      notifyListeners();
-    }
+    _playlistId = id;
+    _playlistTitle = title;
+    _playlistCover = cover;
+    _isScheduled = isScheduled;
+    notifyListeners();
   }
 
   Future<bool> likeCurrentTrack(BuildContext context, int playlistId) async {

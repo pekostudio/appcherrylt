@@ -32,12 +32,22 @@ class SchedulerPageState extends State<SchedulerPage> {
     final getSchedule = Provider.of<GetSchedule>(context, listen: false);
     final schedulerProvider =
         Provider.of<SchedulerProvider>(context, listen: false);
+    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
 
     try {
       await getSchedule.fetchSchedulerData(userSession.globalToken);
       schedulerProvider.setSchedule(getSchedule);
 
-      // Force a state update after schedule refresh
+      // Check if we need to start a new scheduled playlist
+      final activeSchedule = getSchedule.getActiveSchedule();
+      if (activeSchedule != null &&
+          (!audioProvider.isPlaying ||
+              audioProvider.playlistId != activeSchedule.playlist)) {
+        if (mounted) {
+          _navigateToMusicPage(activeSchedule.playlist, isScheduled: true);
+        }
+      }
+
       if (mounted) {
         setState(() {});
       }

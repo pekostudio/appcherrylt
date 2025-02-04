@@ -8,6 +8,7 @@ import 'package:appcherrylt/core/widgets/audio_player_widget.dart';
 import 'package:appcherrylt/core/widgets/favourite_toggle_icon.dart';
 import 'package:appcherrylt/features/offline/data/offline_playlist_data.dart';
 import 'package:appcherrylt/features/scheduler/data/get_scheduler.dart';
+import 'package:appcherrylt/features/scheduler/presentation/index.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -100,6 +101,7 @@ class MusicPageState extends State<MusicPage> {
     String currentTime = DateFormat('HH:mm').format(now);
 
     bool hasActiveSchedule = false;
+    ScheduleItem? currentSchedule;
 
     // Find today's schedule
     var todaySchedule =
@@ -108,20 +110,40 @@ class MusicPageState extends State<MusicPage> {
     if (todaySchedule != null) {
       for (var schedule in todaySchedule) {
         if (schedule.start!.compareTo(currentTime) <= 0 &&
-            schedule.end!.compareTo(currentTime) >= 0) {
+            schedule.end!.compareTo(currentTime) > 0) {
+          // Changed >= to > for end time
           hasActiveSchedule = true;
+          currentSchedule = schedule;
           break;
         }
       }
     }
 
-    // Update the scheduled status in AudioProvider
-    if (!hasActiveSchedule) {
-      logger.d('No active scheduled playlists found');
-      audioProvider.setPlaylistDetails(audioProvider.playlistId ?? 0,
-          audioProvider.playlistTitle ?? '', audioProvider.playlistCover ?? '',
-          isScheduled: false);
+    // If current playlist is scheduled but no longer active, or if there's a different scheduled playlist that should be active
+    if (audioProvider.isScheduled) {
+      if (!hasActiveSchedule ||
+          (currentSchedule != null &&
+              currentSchedule.playlist != widget.playlistId)) {
+        logger.d('Current scheduled playlist should stop');
+        await audioProvider.stop();
+
+        // If we're in a scheduled playlist that's no longer active, navigate back
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const SchedulerPage()),
+          );
+        }
+      }
     }
+
+    // Update the scheduled status in AudioProvider
+    audioProvider.setPlaylistDetails(
+      audioProvider.playlistId ?? 0,
+      audioProvider.playlistTitle ?? '',
+      audioProvider.playlistCover ?? '',
+      isScheduled: hasActiveSchedule,
+    );
   }
 
   Future<void> _initializeAndPlay() async {

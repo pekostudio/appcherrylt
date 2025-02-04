@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
+import 'package:intl/intl.dart';
 
 class GetSchedule extends ChangeNotifier {
   List<ScheduleItem>? list;
@@ -88,6 +89,37 @@ class GetSchedule extends ChangeNotifier {
       ads = [];
       notifyListeners();
     }
+  }
+
+  ScheduleItem? getActiveSchedule() {
+    DateTime now = DateTime.now();
+    int currentDay = now.weekday;
+    String currentTime = DateFormat('HH:mm').format(now);
+
+    return list?.firstWhere(
+      (schedule) =>
+          schedule.day == currentDay &&
+          schedule.start!.compareTo(currentTime) <= 0 &&
+          schedule.end!.compareTo(currentTime) >
+              0, // Changed >= to > for end time
+      orElse: () => null as ScheduleItem,
+    );
+  }
+
+  ScheduleItem? getNextSchedule() {
+    DateTime now = DateTime.now();
+    int currentDay = now.weekday;
+    String currentTime = DateFormat('HH:mm').format(now);
+
+    var todaySchedules = list
+        ?.where((schedule) => schedule.day == currentDay)
+        .toList()
+      ?..sort((a, b) => a.start!.compareTo(b.start!));
+
+    return todaySchedules?.firstWhere(
+      (schedule) => schedule.start!.compareTo(currentTime) > 0,
+      orElse: () => null as ScheduleItem,
+    );
   }
 }
 
