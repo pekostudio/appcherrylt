@@ -65,6 +65,10 @@ class AudioProvider extends ChangeNotifier {
 
   bool _isScheduledPlaylist = false;
   bool get isScheduledPlaylist => _isScheduledPlaylist;
+  set isScheduledPlaylist(bool value) {
+    _isScheduledPlaylist = value;
+    notifyListeners();
+  }
 
   var _playlist = ConcatenatingAudioSource(
     useLazyPreparation: true,
@@ -286,6 +290,7 @@ class AudioProvider extends ChangeNotifier {
     required int playlistId,
     required String playlistTitle,
     required String playlistCover,
+    bool isScheduledPlaylist = false,
   }) {
     try {
       final globalAudioState =
@@ -309,6 +314,8 @@ class AudioProvider extends ChangeNotifier {
       _isPlaying = true;
 
       notifyListeners(); // Ensure the UI updates
+
+      this.isScheduledPlaylist = isScheduledPlaylist;
     } catch (e) {
       logger.e("Error playing audio: $e");
     }

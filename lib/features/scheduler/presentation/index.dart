@@ -83,36 +83,51 @@ class SchedulerPageState extends State<SchedulerPage> {
   }
 
   Future<void> _refreshScheduleData() async {
-    if (!mounted) return;
-
-    final userSession = Provider.of<UserSession>(context, listen: false);
-    final getSchedule = Provider.of<GetSchedule>(context, listen: false);
-    final schedulerProvider =
-        Provider.of<SchedulerProvider>(context, listen: false);
-    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
-
     try {
+      final userSession = Provider.of<UserSession>(context, listen: false);
+      final getSchedule = Provider.of<GetSchedule>(context, listen: false);
+      final schedulerProvider =
+          Provider.of<SchedulerProvider>(context, listen: false);
+      final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+
+      // Force refresh from database
       await getSchedule.fetchSchedulerData(userSession.globalToken);
       schedulerProvider.setSchedule(getSchedule);
 
-      // Check if we need to start a new scheduled playlist
+      final currentTime = DateTime.now();
       final activeSchedule = getSchedule.getActiveSchedule();
-      if (activeSchedule?.playlist != null &&
-          (!audioProvider.isPlaying ||
-              audioProvider.playlistId != activeSchedule?.playlist)) {
-        if (mounted) {
-          _navigateToMusicPage(activeSchedule!.playlist!, isScheduled: true);
+      final currentPlaylistId = audioProvider.currentPlaylistId;
+
+      // Check if current playing playlist is still valid in schedule
+      if (audioProvider.isScheduledPlaylist) {
+        final isStillScheduled = getSchedule.list?.any((schedule) =>
+                schedule.playlist == currentPlaylistId &&
+                schedulerProvider.isTimeInSchedule(schedule, currentTime)) ??
+            false;
+
+        if (!isStillScheduled) {
+          logger.d('Current playlist no longer scheduled, stopping playback');
+          await audioProvider.stop();
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const SchedulerPage()),
+            );
+          }
+          return;
         }
       }
 
-      // Check if current playlist should stop
-      _checkPlaylistEnd();
-
-      if (mounted) {
-        setState(() {});
+      // Check if we should start a new scheduled playlist
+      if (activeSchedule != null &&
+          (!audioProvider.isPlaying ||
+              currentPlaylistId != activeSchedule.playlist) &&
+          schedulerProvider.isTimeInSchedule(activeSchedule, currentTime)) {
+        _navigateToMusicPage(activeSchedule.playlist!, isScheduled: true);
       }
 
-      logger.d('Schedule data refreshed');
+      logger.d(
+          'Schedule refresh completed. Active schedule: ${activeSchedule?.playlistName}');
     } catch (e) {
       logger.e('Error refreshing schedule data: $e');
     }
@@ -193,6 +208,7 @@ class SchedulerPageState extends State<SchedulerPage> {
             ...todaySchedule.map((schedule) {
               final status = schedulerProvider.getScheduleStatus(schedule);
               return Card(
+                color: Colors.white,
                 child: ListTile(
                   title: Text(
                       'Playlist: ${schedule.playlistName ?? schedule.playlist}'),

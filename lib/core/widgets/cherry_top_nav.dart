@@ -35,8 +35,7 @@ class CherryTopNavigationState extends State<CherryTopNavigation> {
       width: double.infinity,
       height: 160.0, // Ensure it includes space for both Rows
       child: DecoratedBox(
-        decoration:
-            BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor),
+        decoration: BoxDecoration(color: Colors.white),
         child: Column(
           children: [
             SizedBox(

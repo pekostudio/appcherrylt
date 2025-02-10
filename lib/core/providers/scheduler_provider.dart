@@ -243,6 +243,26 @@ class SchedulerProvider extends ChangeNotifier {
     }
   }
 
+  bool isTimeInSchedule(ScheduleItem schedule, DateTime currentTime) {
+    final scheduleStart = _parseTime(schedule.start!);
+    final scheduleEnd = _parseTime(schedule.end!);
+    final currentTimeOfDay = TimeOfDay.fromDateTime(currentTime);
+
+    return _isTimeInRange(currentTimeOfDay, scheduleStart, scheduleEnd);
+  }
+
+  bool _isTimeInRange(TimeOfDay time, TimeOfDay start, TimeOfDay end) {
+    final now = time.hour * 60 + time.minute;
+    final startMinutes = start.hour * 60 + start.minute;
+    final endMinutes = end.hour * 60 + end.minute;
+    return now >= startMinutes && now < endMinutes;
+  }
+
+  TimeOfDay _parseTime(String timeStr) {
+    final parts = timeStr.split(':');
+    return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+  }
+
   @override
   void dispose() {
     _invalidateCache();

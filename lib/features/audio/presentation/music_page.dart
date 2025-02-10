@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:io';
 import 'package:appcherrylt/core/models/favourites.dart';
 import 'package:appcherrylt/core/models/get_tracks.dart';
+import 'package:appcherrylt/core/models/user_session.dart';
 import 'package:appcherrylt/core/providers/audio_provider.dart';
 import 'package:appcherrylt/core/providers/scheduler_provider.dart';
 import 'package:appcherrylt/core/widgets/audio_player_widget.dart';
 import 'package:appcherrylt/core/widgets/favourite_toggle_icon.dart';
+import 'package:appcherrylt/features/home/presentation/index.dart';
 import 'package:appcherrylt/features/offline/data/offline_playlist_data.dart';
 import 'package:appcherrylt/features/scheduler/data/get_scheduler.dart';
 import 'package:appcherrylt/features/scheduler/presentation/index.dart';
@@ -18,7 +20,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:appcherrylt/features/audio/presentation/music_page_helpers.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
+//import 'package:intl/intl.dart';
 import 'package:appcherrylt/features/offline/presentation/offline.dart';
 
 class MusicPage extends StatefulWidget {
@@ -82,8 +84,8 @@ class MusicPageState extends State<MusicPage> {
   }
 
   void _startSchedulerCheck() {
-    // Check every minute
-    _schedulerCheckTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+    // Check more frequently - every 30 seconds
+    _schedulerCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _checkSchedulerStatus();
     });
     // Do initial check
@@ -94,40 +96,37 @@ class MusicPageState extends State<MusicPage> {
     if (!mounted) return;
 
     final getSchedule = Provider.of<GetSchedule>(context, listen: false);
+    final schedulerProvider =
+        Provider.of<SchedulerProvider>(context, listen: false);
     final audioProvider = Provider.of<AudioProvider>(context, listen: false);
 
-    DateTime now = DateTime.now();
-    int currentDay = now.weekday;
-    String currentTime = DateFormat('HH:mm').format(now);
+    // Force refresh schedule data
+    await getSchedule.fetchSchedulerData(
+        Provider.of<UserSession>(context, listen: false).globalToken);
+    schedulerProvider.setSchedule(getSchedule);
 
-    bool hasActiveSchedule = false;
-    ScheduleItem? currentSchedule;
+    final currentTime = DateTime.now();
 
-    // Find today's schedule
-    var todaySchedule =
-        getSchedule.list?.where((item) => item.day == currentDay).toList();
+    // Check if this is the currently playing playlist
+    if (audioProvider.currentPlaylistId == widget.playlistId) {
+      bool isStillValid = false;
 
-    if (todaySchedule != null) {
-      for (var schedule in todaySchedule) {
-        if (schedule.start!.compareTo(currentTime) <= 0 &&
-            schedule.end!.compareTo(currentTime) > 0) {
-          // Changed >= to > for end time
-          hasActiveSchedule = true;
-          currentSchedule = schedule;
-          break;
+      // Check if the playlist is still scheduled for current time
+      if (getSchedule.list != null) {
+        for (var schedule in getSchedule.list!) {
+          if (schedule.playlist == widget.playlistId &&
+              schedulerProvider.isTimeInSchedule(schedule, currentTime)) {
+            isStillValid = true;
+            break;
+          }
         }
       }
-    }
 
-    // If current playlist is scheduled but no longer active, or if there's a different scheduled playlist that should be active
-    if (audioProvider.isScheduled) {
-      if (!hasActiveSchedule ||
-          (currentSchedule != null &&
-              currentSchedule.playlist != widget.playlistId)) {
-        logger.d('Current scheduled playlist should stop');
+      // If playlist was scheduled but is no longer valid, redirect to scheduler
+      if (!isStillValid && audioProvider.isScheduledPlaylist) {
+        logger.d(
+            'Scheduled playlist no longer active or time slot ended, returning to scheduler');
         await audioProvider.stop();
-
-        // If we're in a scheduled playlist that's no longer active, navigate back
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -136,35 +135,27 @@ class MusicPageState extends State<MusicPage> {
         }
       }
     }
-
-    // Update the scheduled status in AudioProvider
-    audioProvider.setPlaylistDetails(
-      audioProvider.playlistId ?? 0,
-      audioProvider.playlistTitle ?? '',
-      audioProvider.playlistCover ?? '',
-      isScheduled: hasActiveSchedule,
-    );
   }
 
   Future<void> _initializeAndPlay() async {
     if (!mounted) return;
 
     final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+    final schedulerProvider =
+        Provider.of<SchedulerProvider>(context, listen: false);
+
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // Instead of stopping immediately, store the current state
       bool wasPlaying = audioProvider.isPlaying;
       bool wasPaused = audioProvider.isPaused;
 
-      // Only stop if we're about to play new content
       if (wasPlaying || wasPaused) {
         await audioProvider.stop();
       }
 
-      // Wait a bit to ensure cleanup
       await Future.delayed(const Duration(milliseconds: 100));
 
       await populatePlaylist(context, widget, logger);
@@ -174,10 +165,13 @@ class MusicPageState extends State<MusicPage> {
       await Future.delayed(const Duration(milliseconds: 100));
 
       if (mounted) {
-        // Restore audio player visibility before starting new playback
         if (wasPlaying || wasPaused) {
           setState(() {});
         }
+
+        // Set isScheduledPlaylist based on current schedule
+        final isScheduled = schedulerProvider.getCurrentScheduledPlaylistId() ==
+            widget.playlistId;
 
         audioProvider.playAudio(
           context: context,
@@ -185,6 +179,7 @@ class MusicPageState extends State<MusicPage> {
           playlistId: widget.playlistId,
           playlistTitle: widget.title,
           playlistCover: widget.cover,
+          isScheduledPlaylist: isScheduled, // Add this parameter
         );
       }
     } catch (e) {
@@ -247,7 +242,7 @@ class MusicPageState extends State<MusicPage> {
     }
   }
 
-  // Add a method to determine if back button should be shown
+  // Display back button if there is NO scheduled playlists
   bool _shouldShowBackButton() {
     logger.d('Checking back button visibility:');
     final schedulerProvider =
@@ -279,7 +274,18 @@ class MusicPageState extends State<MusicPage> {
                       child: IconButton(
                         icon: const Icon(Icons.arrow_back, color: Colors.black),
                         onPressed: () {
-                          Navigator.pop(context);
+                          // Check if we can pop
+                          if (Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          } else {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const IndexPage(),
+                              ),
+                            );
+                            // Navigate directly to IndexPage
+                          }
                         },
                       ),
                     ),
