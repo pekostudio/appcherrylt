@@ -83,6 +83,8 @@ class SchedulerPageState extends State<SchedulerPage> {
   }
 
   Future<void> _refreshScheduleData() async {
+    if (!mounted) return;
+
     try {
       final getSchedule = Provider.of<GetSchedule>(context, listen: false);
       final schedulerProvider =
@@ -97,18 +99,31 @@ class SchedulerPageState extends State<SchedulerPage> {
       final currentScheduledPlaylist =
           schedulerProvider.getCurrentScheduledPlaylist();
 
+      // If there's a currently scheduled playlist
       if (currentScheduledPlaylist != null &&
           currentScheduledPlaylist.playlist != null) {
-        // If there's a scheduled playlist that should be playing now
-        if (audioProvider.currentPlaylistId !=
-            currentScheduledPlaylist.playlist) {
-          // Use existing _navigateToMusicPage method which handles fetching playlist details
+        // Check if we need to switch to this playlist
+        if (!audioProvider.isPlaying ||
+            audioProvider.currentPlaylistId !=
+                currentScheduledPlaylist.playlist) {
+          logger.d(
+              'Switching to scheduled playlist: ${currentScheduledPlaylist.playlist}');
+          // Stop current playback if any
+          if (audioProvider.isPlaying) {
+            await audioProvider.stop();
+          }
+          // Navigate to new playlist
           _navigateToMusicPage(currentScheduledPlaylist.playlist!,
               isScheduled: true);
         }
       } else if (audioProvider.isScheduledPlaylist) {
+        // No scheduled playlist should be playing now
         logger.d('Current playlist no longer scheduled, stopping playback');
         await audioProvider.stop();
+        if (mounted) {
+          setState(
+              () {}); // Just refresh the current page instead of replacing it
+        }
       }
     } catch (e) {
       logger.e('Error refreshing schedule data: $e');
