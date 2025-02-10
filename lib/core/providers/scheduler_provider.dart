@@ -263,6 +263,17 @@ class SchedulerProvider extends ChangeNotifier {
     return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
   }
 
+  ScheduleItem? getCurrentScheduledPlaylist() {
+    if (_todayScheduleCache == null) return null;
+    final now = DateTime.now();
+    for (var schedule in _todayScheduleCache!) {
+      if (isTimeInSchedule(schedule, now)) {
+        return schedule;
+      }
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     _invalidateCache();
