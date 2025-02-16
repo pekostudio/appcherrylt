@@ -50,7 +50,6 @@ class API {
       logger.d('Error occurred: $e');
       rethrow;
     }
-    return null;
   }
 
   // Get Playlists

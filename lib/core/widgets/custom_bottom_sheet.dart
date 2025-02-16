@@ -91,71 +91,69 @@ class CustomBottomSheetState extends State<CustomBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
+      width: double.infinity,
       height: widget.height,
-      child: Container(
-        padding: const EdgeInsets.all(32.0),
-        color: Theme.of(context)
-            .canvasColor, // Set the background color based on the theme
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  widget.text1,
-                  style: const TextStyle(
-                    fontSize: 18,
-                  ),
+      padding: const EdgeInsets.all(32.0),
+      color: Theme.of(context).canvasColor,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                widget.text1,
+                style: const TextStyle(
+                  fontSize: 18,
                 ),
-                Switch(
-                  value: _switchValue,
-                  activeColor: Colors.red,
-                  onChanged: (value) {
-                    setState(() {
-                      _switchValue = value;
-                      widget.onSwitchChanged(value);
-                    });
-                  },
+              ),
+              Switch(
+                value: _switchValue,
+                activeColor: Colors.red,
+                onChanged: (value) {
+                  setState(() {
+                    _switchValue = value;
+                    widget.onSwitchChanged(value);
+                  });
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                widget.text2,
+                style: const TextStyle(
+                  fontSize: 18,
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  widget.text2,
-                  style: const TextStyle(
-                    fontSize: 18,
-                  ),
+              ),
+              IconButton(
+                icon: Icon(
+                  widget.icon2,
+                  color: Theme.of(context).iconTheme.color,
                 ),
-                IconButton(
-                  icon: Icon(
-                    widget.icon2,
-                    color: Theme.of(context).iconTheme.color,
-                  ),
-                  onPressed: () {
-                    _handleLogout(context);
-                  },
+                onPressed: () {
+                  _handleLogout(context);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'version 1.4.4',
+                style: TextStyle(
+                  fontSize: 12,
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'version 1.4.2',
-                  style: TextStyle(
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -295,15 +295,15 @@ class MusicPageState extends State<MusicPage> {
             const SizedBox(height: 16),
             Center(
               child: Container(
-                width: 280, // Match the image dimensions
-                height: 280,
+                width: MediaQuery.of(context).size.width * 0.65,
+                height: MediaQuery.of(context).size.width * 0.65,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16.0), // Rounded corners
+                  borderRadius: BorderRadius.circular(16.0),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.6), // Shadow color
-                      blurRadius: 56, // Spread of the shadow
-                      offset: const Offset(0, 0), // Position of the shadow
+                      color: Colors.black.withOpacity(0.6),
+                      blurRadius: 56,
+                      offset: const Offset(0, 0),
                     ),
                   ],
                 ),
@@ -311,8 +311,8 @@ class MusicPageState extends State<MusicPage> {
                   borderRadius: BorderRadius.circular(16.0),
                   child: CachedNetworkImage(
                     imageUrl: widget.cover,
-                    width: 280,
-                    height: 280,
+                    width: MediaQuery.of(context).size.width * 0.65,
+                    height: MediaQuery.of(context).size.width * 0.65,
                     fit: BoxFit.contain,
                     errorWidget: (context, url, error) =>
                         const Icon(Icons.error),

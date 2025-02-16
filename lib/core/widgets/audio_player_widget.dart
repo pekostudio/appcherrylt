@@ -52,8 +52,8 @@ class AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                         const SizedBox(height: 98),
                         Center(
                           child: Container(
-                            width: 280, // Match the image dimensions
-                            height: 280,
+                            width: MediaQuery.of(context).size.width * 0.6,
+                            height: MediaQuery.of(context).size.width * 0.6,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(
                                   16.0), // Rounded corners
@@ -71,8 +71,9 @@ class AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                               borderRadius: BorderRadius.circular(16.0),
                               child: CachedNetworkImage(
                                 imageUrl: globalAudioState.currentPlaylistCover,
-                                width: 280,
-                                height: 280,
+                                width: MediaQuery.of(context).size.width * 0.65,
+                                height:
+                                    MediaQuery.of(context).size.width * 0.65,
                                 fit: BoxFit.contain,
                                 errorWidget: (context, url, error) =>
                                     const Icon(Icons.error),

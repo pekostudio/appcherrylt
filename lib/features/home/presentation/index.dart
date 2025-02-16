@@ -235,7 +235,7 @@ class IndexPageState extends State<IndexPage> with RouteAware {
                 maxCrossAxisExtent: 200,
                 crossAxisSpacing: 4,
                 mainAxisSpacing: 4,
-                childAspectRatio: 1.0,
+                childAspectRatio: 1,
               ),
               itemCount: categoryPlaylists.length,
               itemBuilder: (context, index) {
@@ -350,13 +350,18 @@ class IndexPageState extends State<IndexPage> with RouteAware {
     final audioProvider = Provider.of<AudioProvider>(context);
     final getPlaylists = Provider.of<GetPlaylists>(context);
 
-    bool isPlaying = audioProvider.isPlaying; // Replace with actual property
+    bool isPlaying = audioProvider.isPlaying;
     bool isPaused = audioProvider.isPaused;
 
     return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: const CherryTopNavigation(),
+      appBar: AppBar(
+        toolbarHeight: MediaQuery.of(context).size.height * 0.06,
+        automaticallyImplyLeading: false,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        elevation: 0,
+        flexibleSpace: SafeArea(
+          child: const CherryTopNavigation(),
+        ),
       ),
       body: SingleChildScrollView(
         child: Column(
