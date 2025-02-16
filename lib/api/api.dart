@@ -38,12 +38,17 @@ class API {
           return accessToken;
         } else {
           logger.d('Error from API: ${data['error']['message']}');
+          throw Exception(data['error']['message'] ?? 'Login failed');
         }
+      } else if (response.statusCode == 401) {
+        throw Exception('Invalid credentials');
       } else {
         logger.d('Failed to get token: ${response.body}');
+        throw Exception('Server error occurred');
       }
     } catch (e) {
       logger.d('Error occurred: $e');
+      rethrow;
     }
     return null;
   }

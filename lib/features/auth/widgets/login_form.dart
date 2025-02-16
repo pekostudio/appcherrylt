@@ -19,6 +19,7 @@ class LoginFormState extends State<LoginForm> {
   final TextEditingController _loginController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscureText = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -98,18 +99,35 @@ class LoginFormState extends State<LoginForm> {
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () async {
-                if (widget.formKey.currentState!.validate()) {
-                  String login = _loginController.text;
-                  String password = _passwordController.text;
-                  await _handleLogin(login, password);
-                }
-              },
+              onPressed: _isLoading
+                  ? null
+                  : () async {
+                      if (widget.formKey.currentState!.validate()) {
+                        setState(() {
+                          _isLoading = true;
+                        });
+                        String login = _loginController.text;
+                        String password = _passwordController.text;
+                        await _handleLogin(login, password);
+                        setState(() {
+                          _isLoading = false;
+                        });
+                      }
+                    },
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),
                 backgroundColor: const Color(0xFF2C2C2C),
               ),
-              child: const Text('LOGIN'),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text('LOGIN'),
             ),
           ],
         ),
@@ -118,11 +136,41 @@ class LoginFormState extends State<LoginForm> {
   }
 
   Future<void> _handleLogin(String login, String password) async {
-    String? token = await API().getAccessToken(login, password);
+    try {
+      String? token = await API().getAccessToken(login, password);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    Provider.of<UserSession>(context, listen: false).setGlobalToken(token!);
-    Navigator.pushReplacementNamed(context, 'index');
+      if (token == null) {
+        // Show error message if login failed
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Invalid credentials. Please try again.',
+                style: TextStyle(color: Colors.red),
+              ),
+              backgroundColor: Colors.white,
+            ),
+          );
+        }
+        return;
+      }
+
+      Provider.of<UserSession>(context, listen: false).setGlobalToken(token);
+      Navigator.pushReplacementNamed(context, 'index');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Invalid credentials. Please try again.',
+              style: TextStyle(color: Colors.red),
+            ),
+            backgroundColor: Colors.white,
+          ),
+        );
+      }
+    }
   }
 }
