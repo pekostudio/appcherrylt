@@ -25,10 +25,26 @@ class OfflinePlaylistData {
     // Store name
     await prefs.setString('playlist_name_$playlistId', name);
 
-    // Only store cover path if it's a local file path (not a URL)
+    // Store relative path for cover
     if (!coverPath.startsWith('http')) {
-      await prefs.setString('playlist_cover_$playlistId', coverPath);
-      logger.d('Stored local cover path: $coverPath');
+      final directory = await getApplicationDocumentsDirectory();
+      String relativePath = coverPath.replaceFirst('${directory.path}/', '');
+
+      // Ensure the relative path format is correct
+      if (!relativePath.startsWith('$playlistId/')) {
+        relativePath = '$playlistId/cover.jpg';
+      }
+
+      await prefs.setString('playlist_cover_$playlistId', relativePath);
+      logger.d('Stored relative cover path: $relativePath');
+
+      // Verify the file exists
+      final file = File('${directory.path}/$relativePath');
+      if (await file.exists()) {
+        logger.d('Verified cover file exists at: ${file.path}');
+      } else {
+        logger.e('Cover file not found at: ${file.path}');
+      }
     } else {
       logger.d('Skipping URL cover path storage: $coverPath');
     }
@@ -48,17 +64,25 @@ class OfflinePlaylistData {
 
   static Future<String?> getCoverImagePath(int playlistId) async {
     final prefs = await SharedPreferences.getInstance();
-    final coverPath = prefs.getString('playlist_cover_$playlistId');
-    logger.d('Getting cover path for playlist $playlistId: $coverPath');
+    final relativePath = prefs.getString('playlist_cover_$playlistId');
+    logger.d(
+        'Getting relative cover path for playlist $playlistId: $relativePath');
 
-    if (coverPath != null) {
-      final file = File(coverPath);
+    if (relativePath != null) {
+      final directory = await getApplicationDocumentsDirectory();
+      final absolutePath = '${directory.path}/$relativePath';
+      final file = File(absolutePath);
       final exists = await file.exists();
-      logger.d('Cover file exists: $exists for path: $coverPath');
-      if (exists) {
-        return coverPath;
+      logger.d('Cover file exists: $exists for path: $absolutePath');
+
+      // Verify the path belongs to the correct playlist
+      if (exists && absolutePath.contains('/$playlistId/')) {
+        return absolutePath;
       } else {
-        logger.d('Cover file does not exist at path: $coverPath');
+        logger.d(
+            'Cover file does not exist or path is invalid for playlist $playlistId');
+        // Clean up invalid path
+        await prefs.remove('playlist_cover_$playlistId');
       }
     } else {
       logger.d(
@@ -69,38 +93,73 @@ class OfflinePlaylistData {
 
   static Future<void> removeOfflinePlaylist(int playlistId) async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Remove from offline playlists list
     final offlinePlaylists = prefs.getStringList(_offlinePlaylistsKey) ?? [];
     if (offlinePlaylists.remove(playlistId.toString())) {
       await prefs.setStringList(_offlinePlaylistsKey, offlinePlaylists);
     }
+
+    // Clean up all related SharedPreferences entries
+    await prefs.remove('playlist_name_$playlistId');
+    await prefs.remove('playlist_cover_$playlistId');
+
+    logger.d('Removed all SharedPreferences entries for playlist $playlistId');
   }
 
   static Future<List<Map<String, dynamic>>> getOfflineTracks(
       int playlistId) async {
+    final tracks = <Map<String, dynamic>>[];
     final directory = await getApplicationDocumentsDirectory();
     final playlistDirectory = Directory('${directory.path}/$playlistId');
 
+    logger.d('Loading tracks for playlist ID: $playlistId');
+    logger.d('Playlist directory: ${playlistDirectory.path}');
+
     if (!await playlistDirectory.exists()) {
+      logger.d('Playlist directory does not exist: ${playlistDirectory.path}');
       return [];
     }
 
-    List<Map<String, dynamic>> tracks = [];
-    await for (var entity in playlistDirectory.list()) {
-      if (entity is File && entity.path.endsWith('.mp3')) {
-        final fileName = path.basename(entity.path);
-        final parts = fileName.split(' - ');
-        if (parts.length >= 2) {
-          tracks.add({
-            'id': tracks.length,
-            'artist': parts[0],
-            'title': parts[1].replaceAll('.mp3', ''),
+    try {
+      await for (var entity in playlistDirectory.list()) {
+        if (entity is File && entity.path.endsWith('.mp3')) {
+          // Verify the file belongs to the correct playlist directory
+          if (!entity.path.contains('/$playlistId/')) {
+            logger.w(
+                'Skipping file not in correct playlist directory: ${entity.path}');
+            continue;
+          }
+
+          final fileName = path.basename(entity.path);
+          final trackName = fileName.replaceAll('.mp3', '');
+
+          final parts = trackName.split(' - ');
+          final artist = parts.isNotEmpty ? parts[0] : 'Unknown Artist';
+          final title = parts.length > 1 ? parts[1] : trackName;
+
+          final track = {
             'filePath': entity.path,
-          });
+            'id': tracks.length + 1,
+            'title': title,
+            'artist': artist,
+            'name': trackName,
+            'playlistId': playlistId, // Ensure playlist ID is included
+          };
+
+          tracks.add(track);
+          logger.d(
+              'Loaded track: $trackName from ${entity.path} for playlist $playlistId');
         }
       }
-    }
 
-    return tracks;
+      logger.d(
+          'Successfully loaded ${tracks.length} tracks for playlist $playlistId');
+      return tracks;
+    } catch (e) {
+      logger.e('Error loading tracks for playlist $playlistId: $e');
+      return [];
+    }
   }
 
   // Download cover image
@@ -119,7 +178,9 @@ class OfflinePlaylistData {
       if (response.statusCode == 200) {
         final directory = await getApplicationDocumentsDirectory();
         final playlistDir = Directory('${directory.path}/$playlistId');
-        final filePath = path.join(playlistDir.path, 'cover.jpg');
+        final fileName = 'cover.jpg';
+        final relativePath = '$playlistId/$fileName';
+        final absolutePath = '${directory.path}/$relativePath';
 
         // Ensure directory exists
         if (!await playlistDir.exists()) {
@@ -127,22 +188,35 @@ class OfflinePlaylistData {
           logger.d('Created playlist directory: ${playlistDir.path}');
         }
 
+        // Delete existing cover file if it exists
+        final existingFile = File(absolutePath);
+        if (await existingFile.exists()) {
+          await existingFile.delete();
+          logger.d('Deleted existing cover file');
+        }
+
         // Save the file
-        final file = File(filePath);
+        final file = File(absolutePath);
         await file.writeAsBytes(response.bodyBytes);
 
         // Verify file was written
         if (await file.exists()) {
-          logger.d('Cover image downloaded and saved to $filePath');
+          logger.d('Cover image downloaded and saved to $absolutePath');
           logger.d('File size: ${await file.length()} bytes');
 
-          // Save the cover image path in SharedPreferences
+          // Store relative path in SharedPreferences
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('playlist_cover_$playlistId', filePath);
+          await prefs.setString('playlist_cover_$playlistId', relativePath);
+          logger.d('Stored relative path in SharedPreferences: $relativePath');
 
-          // Verify SharedPreferences was updated
-          final savedPath = prefs.getString('playlist_cover_$playlistId');
-          logger.d('Verified cover path in SharedPreferences: $savedPath');
+          // Verify the file can be accessed using the relative path
+          final verifyPath = '${directory.path}/$relativePath';
+          final verifyFile = File(verifyPath);
+          if (await verifyFile.exists()) {
+            logger.d('Verified cover file is accessible using relative path');
+          } else {
+            logger.e('Cover file not accessible using relative path');
+          }
         } else {
           logger.e('File was not created after write attempt');
         }
@@ -193,14 +267,41 @@ class OfflinePlaylistData {
 
   static Future<void> verifyAndCleanupCoverPath(int playlistId) async {
     final prefs = await SharedPreferences.getInstance();
-    final coverPath = prefs.getString('playlist_cover_$playlistId');
+    final relativePath = prefs.getString('playlist_cover_$playlistId');
 
-    if (coverPath != null) {
-      final file = File(coverPath);
+    if (relativePath != null) {
+      final directory = await getApplicationDocumentsDirectory();
+      final absolutePath = '${directory.path}/$relativePath';
+      final file = File(absolutePath);
       if (!await file.exists()) {
         logger.d('Removing invalid cover path for playlist $playlistId');
         await prefs.remove('playlist_cover_$playlistId');
       }
+    }
+  }
+
+  static Future<void> cleanupOrphanedFiles() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final prefs = await SharedPreferences.getInstance();
+      final offlinePlaylists = prefs.getStringList(_offlinePlaylistsKey) ?? [];
+
+      // Get all directories in app documents
+      final dirs = directory.listSync().whereType<Directory>();
+
+      for (var dir in dirs) {
+        final dirName = path.basename(dir.path);
+        final playlistId = int.tryParse(dirName);
+
+        // If directory name is not a valid playlist ID or playlist is not in offline list
+        if (playlistId == null ||
+            !offlinePlaylists.contains(playlistId.toString())) {
+          logger.d('Removing orphaned directory: ${dir.path}');
+          await dir.delete(recursive: true);
+        }
+      }
+    } catch (e) {
+      logger.e('Error cleaning up orphaned files: $e');
     }
   }
 }

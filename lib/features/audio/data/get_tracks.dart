@@ -53,15 +53,13 @@ class GetTracks with ChangeNotifier {
   }
 
   Future<void> downloadTracks(
-    BuildContext context,
-    int count,
-    int playlistId,
-  ) async {
+      BuildContext context, int trackCount, int playlistId) async {
     try {
-      // Clear existing tracks before fetching new ones
-      _tracks = [];
-      logger.i('Fetching tracks for playlist $playlistId...');
-      _tracks = await fetchTracks(context, playlistId);
+      // Fetch tracks if _tracks is empty
+      if (_tracks.isEmpty) {
+        logger.i('Fetching tracks as _tracks is empty...');
+        _tracks = await fetchTracks(context, playlistId);
+      }
 
       if (_tracks.isEmpty) {
         logger.e('No tracks available to download after fetching');
@@ -71,7 +69,7 @@ class GetTracks with ChangeNotifier {
       String accessToken =
           Provider.of<UserSession>(context, listen: false).globalToken;
 
-      List<dynamic> tracksToDownload = _tracks.take(count).toList();
+      List<dynamic> tracksToDownload = _tracks.take(trackCount).toList();
       int downloadedCount = 0;
 
       for (var track in tracksToDownload) {

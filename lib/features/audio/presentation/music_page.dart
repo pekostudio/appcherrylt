@@ -218,20 +218,29 @@ class MusicPageState extends State<MusicPage> {
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         final directory = await getApplicationDocumentsDirectory();
-        final filePath = '${directory.path}/$playlistId/cover.jpg';
+        final playlistDir = Directory('${directory.path}/$playlistId');
+        if (!await playlistDir.exists()) {
+          await playlistDir.create(recursive: true);
+        }
+        final filePath = '${playlistDir.path}/cover.jpg';
         final file = File(filePath);
-        await file.create(recursive: true);
         await file.writeAsBytes(response.bodyBytes);
         logger.d('Cover image downloaded and saved to $filePath');
 
-        // First save the local file path
-        await OfflinePlaylistData.markPlaylistAsOffline(
-            playlistId, widget.title, filePath); // Local path first
+        // Verify file was written successfully
+        if (await file.exists()) {
+          // Now save the local file path and playlist info
+          await OfflinePlaylistData.markPlaylistAsOffline(
+              playlistId, widget.title, filePath);
+          logger.d('Playlist marked as offline with cover path: $filePath');
 
-        if (context.mounted) {
-          final offlinePage =
-              context.findAncestorStateOfType<OfflinePlaylistsPageState>();
-          offlinePage?.refreshAfterDownload();
+          if (context.mounted) {
+            final offlinePage =
+                context.findAncestorStateOfType<OfflinePlaylistsPageState>();
+            offlinePage?.refreshAfterDownload();
+          }
+        } else {
+          logger.e('Failed to write cover image file');
         }
       } else {
         logger.e(

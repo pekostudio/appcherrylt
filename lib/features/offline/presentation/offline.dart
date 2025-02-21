@@ -1,13 +1,15 @@
-import 'package:appcherrylt/core/providers/audio_provider.dart';
+//import 'package:appcherrylt/core/providers/audio_provider.dart';
+import 'package:appcherrylt/core/providers/audio_provider_offline.dart';
 import 'package:appcherrylt/core/state/global_audio_state.dart';
 import 'package:appcherrylt/core/widgets/cherry_top_nav_offline.dart';
-import 'package:appcherrylt/features/audio/presentation/music_page.dart';
+import 'package:appcherrylt/core/widgets/media_controls_offline.dart';
+//import 'package:appcherrylt/features/audio/presentation/music_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:appcherrylt/features/offline/data/offline_playlist_data.dart';
-//import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
-//import 'package:logger/logger.dart';
+import 'package:logger/logger.dart';
 
 class OfflinePlaylistsPage extends StatefulWidget {
   const OfflinePlaylistsPage({super.key});
@@ -23,7 +25,18 @@ class OfflinePlaylistsPageState extends State<OfflinePlaylistsPage> {
   @override
   void initState() {
     super.initState();
+    _initOfflinePlaylists();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     _loadOfflinePlaylists();
+  }
+
+  Future<void> _initOfflinePlaylists() async {
+    await OfflinePlaylistData.cleanupOrphanedFiles();
+    await _loadOfflinePlaylists();
   }
 
   Future<void> _loadOfflinePlaylists() async {
@@ -64,14 +77,26 @@ class OfflinePlaylistsPageState extends State<OfflinePlaylistsPage> {
 
   Future<void> _removeOfflinePlaylist(int playlistId) async {
     try {
+      // First delete the physical files
+      await OfflinePlaylistData.deletePlaylistFiles(playlistId);
+
+      // Then remove from SharedPreferences and UI
       await OfflinePlaylistData.removeOfflinePlaylist(playlistId);
+
       setState(() {
         offlinePlaylists
             .removeWhere((playlist) => playlist['id'] == playlistId);
       });
     } catch (e) {
-      // Handle error, e.g., show a message to the user
-      print('Error removing offline playlist: $e');
+      logger.e('Error removing offline playlist: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error removing playlist: ${e.toString()}'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -82,6 +107,8 @@ class OfflinePlaylistsPageState extends State<OfflinePlaylistsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final audioProvider = Provider.of<AudioProviderOffline>(context);
+
     return Scaffold(
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight),
@@ -92,126 +119,352 @@ class OfflinePlaylistsPageState extends State<OfflinePlaylistsPage> {
               child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Text(
-                  'You can download playlists to your device. At the moment you do not have offline playlists available.',
+                  'This is Offline Playlists page. You can download playlists to use as offline playlists on your device. At the moment you do not have offline playlists available.',
                   textAlign: TextAlign.center,
                 ),
               ),
             )
-          : Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: FutureBuilder<List<int>>(
-                future: OfflinePlaylistData.getOfflinePlaylists(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const CircularProgressIndicator();
-                  } else if (snapshot.hasError) {
-                    return Text('Error: ${snapshot.error}');
-                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return Text('No offline playlists available.');
-                  } else {
-                    final playlistIds = snapshot.data!;
-                    return ListView.builder(
-                      itemCount: playlistIds.length,
+          : SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 8, 0, 16),
+                      child: Text(
+                        'Offline Playlists',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                    ),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 1,
+                      ),
+                      itemCount: offlinePlaylists.length,
                       itemBuilder: (context, index) {
-                        final playlistId = playlistIds[index];
-                        return FutureBuilder<String?>(
-                          future:
-                              OfflinePlaylistData.getCoverImagePath(playlistId),
-                          builder: (context, coverSnapshot) {
-                            if (coverSnapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              print(
-                                  'DEBUG: Loading cover image for playlist $playlistId...');
-                              return const CircularProgressIndicator();
-                            } else if (coverSnapshot.hasError) {
-                              print(
-                                  'DEBUG: Error loading cover image for playlist $playlistId: ${coverSnapshot.error}');
-                              return Text('Error loading cover image.');
-                            } else {
-                              final coverPath = coverSnapshot.data;
-                              print(
-                                  'DEBUG: Cover path for playlist $playlistId: ${coverPath ?? "null"}');
-                              if (coverPath != null) {
-                                final file = File(coverPath);
-                                print(
-                                    'DEBUG: Cover file exists: ${file.existsSync()}');
+                        final playlist = offlinePlaylists[index];
+                        final playlistId = playlist['id'];
+                        final coverPath = playlist['cover'];
+
+                        return GestureDetector(
+                          onTap: () async {
+                            logger.d(
+                                'Tapped on offline playlist ${playlist['id']}');
+
+                            // Create a new AudioProviderOffline instance for this playlist
+                            final playlistAudioProvider =
+                                AudioProviderOffline(context);
+
+                            final tracks =
+                                await OfflinePlaylistData.getOfflineTracks(
+                                    playlistId);
+
+                            if (tracks.isEmpty) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'No tracks found in this playlist'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
                               }
+                              return;
+                            }
 
-                              final playlist = offlinePlaylists.firstWhere(
-                                (p) => p['id'] == playlistId,
-                                orElse: () => {'name': 'Unknown Playlist'},
-                              );
+                            if (!mounted) return;
 
-                              return ListTile(
-                                title: Text(playlist['name']),
-                                leading: coverPath != null
-                                    ? Builder(
-                                        builder: (context) {
-                                          logger.d(
-                                              'Loading cover image from: $coverPath');
-                                          return Image.file(
+                            logger.d(
+                                'Setting offline playlist ${playlist['id']} with ${tracks.length} tracks');
+                            await playlistAudioProvider
+                                .setOfflinePlaylist(tracks);
+
+                            playlistAudioProvider.setPlaylistDetails(
+                              playlistId,
+                              playlist['name'],
+                              playlist['cover'],
+                            );
+
+                            if (!mounted) return;
+
+                            // Stop the current global audio provider
+                            await audioProvider.stop();
+
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    ChangeNotifierProvider.value(
+                                  value: playlistAudioProvider,
+                                  child: OfflinePlaylistDetailPage(
+                                    playlist: playlist,
+                                    audioProvider: playlistAudioProvider,
+                                  ),
+                                ),
+                              ),
+                            );
+
+                            // Start playing immediately
+                            playlistAudioProvider.play();
+                            logger.d(
+                                'Started playing offline playlist ${playlist['id']} with ${tracks.length} tracks');
+                          },
+                          child: Card(
+                            clipBehavior: Clip.antiAlias,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8.0),
+                              child: Stack(
+                                children: [
+                                  ColorFiltered(
+                                    colorFilter: const ColorFilter.mode(
+                                      Color.fromRGBO(0, 0, 0, 0.5),
+                                      BlendMode.darken,
+                                    ),
+                                    child: coverPath.isNotEmpty
+                                        ? Image.file(
                                             File(coverPath),
-                                            width: 50,
-                                            height: 50,
                                             fit: BoxFit.cover,
+                                            width: double.infinity,
+                                            height: double.infinity,
                                             errorBuilder:
                                                 (context, error, stackTrace) {
-                                              logger.e(
-                                                  'Error displaying cover image: $error');
-                                              return const Icon(Icons.error);
+                                              return const Icon(
+                                                  Icons.music_note,
+                                                  size: 50);
+                                            },
+                                          )
+                                        : const Icon(Icons.music_note,
+                                            size: 50),
+                                  ),
+                                  Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Text(
+                                        playlist['name'],
+                                        style: GoogleFonts.inter(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                          height: 1.3,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(20),
+                                        onTap: () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (BuildContext context) {
+                                              return AlertDialog(
+                                                title: const Text(
+                                                    'Remove Playlist'),
+                                                content: const Text(
+                                                    'Are you sure you want to remove this offline playlist?'),
+                                                actions: [
+                                                  TextButton(
+                                                    child: const Text('Cancel'),
+                                                    onPressed: () =>
+                                                        Navigator.of(context)
+                                                            .pop(),
+                                                  ),
+                                                  TextButton(
+                                                    child: const Text('Remove'),
+                                                    onPressed: () {
+                                                      _removeOfflinePlaylist(
+                                                          playlistId);
+                                                      Navigator.of(context)
+                                                          .pop();
+                                                    },
+                                                  ),
+                                                ],
+                                              );
                                             },
                                           );
                                         },
-                                      )
-                                    : const Icon(Icons.music_note),
-                                trailing: IconButton(
-                                  icon: Icon(Icons.delete),
-                                  onPressed: () async {
-                                    await _removeOfflinePlaylist(playlistId);
-                                  },
-                                ),
-                                onTap: () async {
-                                  final tracks = await OfflinePlaylistData
-                                      .getOfflineTracks(playlistId);
-                                  if (tracks.isNotEmpty) {
-                                    final audioProvider =
-                                        Provider.of<AudioProvider>(context,
-                                            listen: false);
-                                    await audioProvider
-                                        .setOfflinePlaylist(tracks);
-                                    // Navigate to a page that shows the audio player, if needed
-                                    Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => MusicPage(
-                                            id: playlistId,
-                                            name: 'Playlist $playlistId',
-                                            title: 'Playlist $playlistId',
-                                            description: '',
-                                            cover: coverPath ?? '',
-                                            categoryId: 0,
-                                            categoryName: '',
-                                            labelNew: 'false',
-                                            labelUpdated: 'false',
-                                            playlistId: playlistId,
-                                            favorite: false,
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(4.0),
+                                          child: Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.white,
+                                            size: 24,
                                           ),
-                                        ));
-                                  } else {
-                                    print(
-                                        'No tracks available for this playlist');
-                                  }
-                                },
-                              );
-                            }
-                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         );
                       },
-                    );
-                  }
-                },
+                    ),
+                  ],
+                ),
               ),
             ),
+      bottomNavigationBar: audioProvider.isPlaying || audioProvider.isPaused
+          ? MediaControlsOffline(
+              playlistId: audioProvider.currentPlaylistId ?? 0)
+          : null,
+    );
+  }
+}
+
+class OfflinePlaylistDetailPage extends StatelessWidget {
+  final Map<String, dynamic> playlist;
+  final AudioProviderOffline audioProvider;
+  static final Logger logger = Logger();
+
+  const OfflinePlaylistDetailPage({
+    super.key,
+    required this.playlist,
+    required this.audioProvider,
+  });
+
+  Future<void> _handleBack(BuildContext context) async {
+    await audioProvider.stop(); // Stop audio playback
+    audioProvider.dispose(); // Dispose the audio provider
+    if (context.mounted) {
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _loadAndPlayTracks(BuildContext context) async {
+    try {
+      final playlistId = playlist['id'];
+      logger.d('Loading tracks for playlist ID: $playlistId');
+
+      // Get tracks specifically for this playlist
+      final tracks = await OfflinePlaylistData.getOfflineTracks(playlistId);
+
+      if (tracks.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No tracks found in this playlist'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Ensure each track has the correct playlist ID
+      final tracksWithPlaylistId = tracks
+          .map((track) => {
+                ...track,
+                'playlistId': playlistId, // Explicitly set the playlist ID
+              })
+          .toList();
+
+      logger.d(
+          'Setting offline playlist $playlistId with ${tracks.length} tracks');
+      await audioProvider.setOfflinePlaylist(tracksWithPlaylistId);
+
+      audioProvider.setPlaylistDetails(
+        playlistId,
+        playlist['name'],
+        playlist['cover'],
+      );
+
+      // Start playing
+      audioProvider.play();
+      logger.d(
+          'Started playing offline playlist $playlistId with ${tracks.length} tracks');
+    } catch (e) {
+      logger.e('Error loading offline tracks: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading tracks: ${e.toString()}'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Load tracks when page opens
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadAndPlayTracks(context);
+    });
+
+    return WillPopScope(
+      onWillPop: () async {
+        await _handleBack(context);
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => _handleBack(context),
+          ),
+          title: Text(
+            playlist['name'],
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+        ),
+        body: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Center(
+              child: Container(
+                width: MediaQuery.of(context).size.width * 0.65,
+                height: MediaQuery.of(context).size.width * 0.65,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16.0),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.6),
+                      blurRadius: 56,
+                      offset: const Offset(0, 0),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16.0),
+                  child: playlist['cover'].isNotEmpty
+                      ? Image.file(
+                          File(playlist['cover']),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            logger.e('Error loading cover image: $error');
+                            return const Icon(Icons.music_note, size: 100);
+                          },
+                        )
+                      : const Icon(Icons.music_note, size: 100),
+                ),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              playlist['name'],
+              style: Theme.of(context).textTheme.headlineSmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            MediaControlsOffline(playlistId: playlist['id']),
+          ],
+        ),
+      ),
     );
   }
 }
