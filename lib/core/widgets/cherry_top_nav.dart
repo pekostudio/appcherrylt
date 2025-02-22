@@ -8,9 +8,15 @@ import 'package:provider/provider.dart';
 import 'package:appcherrylt/features/home/presentation/index.dart';
 import 'package:appcherrylt/core/providers/audio_provider.dart';
 import 'package:appcherrylt/core/providers/audio_provider_offline.dart';
+//import 'package:appcherrylt/core/providers/connectivity_provider.dart';
 
 class CherryTopNavigation extends StatefulWidget {
-  const CherryTopNavigation({super.key});
+  final bool? isOffline;
+
+  const CherryTopNavigation({
+    super.key,
+    this.isOffline,
+  });
 
   @override
   CherryTopNavigationState createState() => CherryTopNavigationState();
@@ -25,7 +31,8 @@ class CherryTopNavigationState extends State<CherryTopNavigation> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       setState(() {
-        _isOfflineMode = ModalRoute.of(context)?.settings.name == '/offline';
+        _isOfflineMode = widget.isOffline ??
+            ModalRoute.of(context)?.settings.name == '/offline';
         // Get initial theme state
         _darkModeSwitch = Theme.of(context).brightness == Brightness.dark;
       });

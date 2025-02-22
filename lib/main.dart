@@ -1,19 +1,21 @@
-import 'package:appcherrylt/core/providers/ads_provider.dart';
-import 'package:appcherrylt/core/providers/audio_provider.dart';
-import 'package:appcherrylt/core/providers/audio_provider_offline.dart';
-import 'package:appcherrylt/core/providers/scheduler_provider.dart';
-import 'package:appcherrylt/core/state/global_audio_state.dart';
-import 'package:appcherrylt/core/models/get_tracks.dart';
+import 'package:flutter/material.dart';
+import 'package:just_audio_background/just_audio_background.dart';
+import 'package:provider/provider.dart';
 import 'package:appcherrylt/features/auth/presentation/login.dart';
 import 'package:appcherrylt/features/home/presentation/index.dart';
-import 'package:flutter/material.dart';
+import 'package:appcherrylt/features/offline/presentation/offline.dart';
+import 'package:appcherrylt/config/theme_notifier.dart';
+import 'package:appcherrylt/core/providers/audio_provider.dart';
+import 'package:appcherrylt/core/providers/audio_provider_offline.dart';
+import 'package:appcherrylt/core/providers/ads_provider.dart';
+import 'package:appcherrylt/core/providers/connectivity_provider.dart';
 import 'package:appcherrylt/core/models/user_session.dart';
 import 'package:appcherrylt/features/home/data/get_playlists.dart';
 import 'package:appcherrylt/core/models/favourites.dart';
-import 'package:just_audio_background/just_audio_background.dart';
-import 'package:provider/provider.dart';
-import 'package:appcherrylt/config/theme_notifier.dart';
+import 'package:appcherrylt/core/models/get_tracks.dart';
+import 'package:appcherrylt/core/state/global_audio_state.dart';
 import 'package:appcherrylt/features/scheduler/data/get_scheduler.dart';
+import 'package:appcherrylt/core/providers/scheduler_provider.dart';
 
 final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -47,6 +49,7 @@ void main() async {
         ),
         ChangeNotifierProvider(create: (context) => GetSchedule()),
         ChangeNotifierProvider(create: (_) => SchedulerProvider()),
+        ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
       ],
       child: const MyApp(),
     ),
@@ -58,19 +61,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeNotifier>(
-      builder: (context, themeNotifier, _) {
+    return Consumer2<ThemeNotifier, ConnectivityProvider>(
+      builder: (context, themeNotifier, connectivityProvider, child) {
         return MaterialApp(
-          title: 'Cherry Music App',
+          title: 'Cherry Music',
+          theme: themeNotifier.getTheme(),
+          initialRoute: connectivityProvider.isOnline ? 'login' : 'offline',
           routes: {
             'login': (context) => LoginPage(),
             'index': (context) => const IndexPage(),
+            'offline': (context) => const OfflinePlaylistsPage(),
           },
-          theme: themeNotifier.getTheme(),
           navigatorKey: navigatorKey,
-          home: Scaffold(
-            body: LoginPage(),
-          ),
           navigatorObservers: [routeObserver],
         );
       },

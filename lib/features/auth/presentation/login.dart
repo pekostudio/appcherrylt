@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 import '../widgets/login_form.dart';
 import '../widgets/forgot_password_link.dart';
 import '../widgets/create_account_link.dart';
+import '../../../core/providers/connectivity_provider.dart';
 
 class LoginPage extends StatelessWidget {
   final _formKey = GlobalKey<FormState>();
@@ -11,6 +13,15 @@ class LoginPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Check connectivity when the page is built
+    final connectivityProvider = Provider.of<ConnectivityProvider>(context);
+    if (!connectivityProvider.isOnline) {
+      // Use addPostFrameCallback to avoid calling setState during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.pushReplacementNamed(context, 'offline');
+      });
+    }
+
     return Scaffold(
       body: Container(
         width: MediaQuery.of(context).size.width,

@@ -114,7 +114,7 @@ class OfflinePlaylistsPageState extends State<OfflinePlaylistsPage> {
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         flexibleSpace: SafeArea(
-          child: const CherryTopNavigation(),
+          child: const CherryTopNavigation(isOffline: true),
         ),
       ),
       body: offlinePlaylists.isEmpty

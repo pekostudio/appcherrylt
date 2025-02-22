@@ -14,7 +14,7 @@ import 'package:appcherrylt/features/home/data/get_playlists.dart';
 import 'package:appcherrylt/main.dart';
 import 'package:appcherrylt/core/models/favourites.dart';
 import 'package:appcherrylt/core/providers/audio_provider.dart';
-//import 'package:intl/intl.dart';
+import 'package:appcherrylt/core/providers/connectivity_provider.dart';
 import 'package:logger/logger.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -32,6 +32,7 @@ class IndexPageState extends State<IndexPage> with RouteAware {
   bool displayPlaylistsAndFavorites = true;
   bool _isLoading = true;
   bool _hasRedirected = false;
+  bool _wasOffline = false;
 
   Timer? _periodicTimer;
 
@@ -61,6 +62,11 @@ class IndexPageState extends State<IndexPage> with RouteAware {
     final getSchedule = Provider.of<GetSchedule>(context, listen: false);
     final schedulerProvider =
         Provider.of<SchedulerProvider>(context, listen: false);
+    final connectivityProvider =
+        Provider.of<ConnectivityProvider>(context, listen: false);
+
+    // Store initial connectivity state
+    _wasOffline = !connectivityProvider.isOnline;
 
     logger.d('Initializing IndexPage');
 
@@ -71,34 +77,35 @@ class IndexPageState extends State<IndexPage> with RouteAware {
         displayPlaylistsAndFavorites = false;
       });
 
-      // Load schedule data first
-      await getSchedule.fetchSchedulerData(userSession.globalToken);
-      schedulerProvider.setSchedule(getSchedule);
+      if (connectivityProvider.isOnline) {
+        // Load schedule data first
+        await getSchedule.fetchSchedulerData(userSession.globalToken);
+        schedulerProvider.setSchedule(getSchedule);
 
-      // Check if we have any schedules for today (active, upcoming, or completed)
-      final hasScheduledPlaylistsToday =
-          schedulerProvider.hasScheduledPlaylistsToday();
-      logger.d('Has scheduled playlists today: $hasScheduledPlaylistsToday');
+        // Check if we have any schedules for today
+        final hasScheduledPlaylistsToday =
+            schedulerProvider.hasScheduledPlaylistsToday();
+        logger.d('Has scheduled playlists today: $hasScheduledPlaylistsToday');
 
-      // Redirect to scheduler page if there are any schedules for today
-      if (hasScheduledPlaylistsToday && !_hasRedirected) {
-        _hasRedirected = true;
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const SchedulerPage()),
-          );
+        if (hasScheduledPlaylistsToday && !_hasRedirected) {
+          _hasRedirected = true;
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const SchedulerPage()),
+            );
+          }
+          return;
         }
-        return;
+
+        // If no schedules, load playlists
+        if (shouldLoadPlaylistsAndFavorites) {
+          await getPlaylists.fetchTracks(
+              userSession.globalToken, favoriteManager);
+        }
       }
 
-      // If no schedules, load playlists and show home page
-      if (shouldLoadPlaylistsAndFavorites) {
-        await getPlaylists.fetchTracks(
-            userSession.globalToken, favoriteManager);
-      }
-
-      // Start periodic checks only if we're staying on this page
+      // Start periodic checks
       if (mounted) {
         _startPeriodicTimer();
         setState(() {
@@ -357,6 +364,16 @@ class IndexPageState extends State<IndexPage> with RouteAware {
 
     final audioProvider = Provider.of<AudioProvider>(context);
     final getPlaylists = Provider.of<GetPlaylists>(context);
+    final connectivityProvider = Provider.of<ConnectivityProvider>(context);
+
+    // Check if connection state changed from offline to online
+    if (_wasOffline && connectivityProvider.isOnline) {
+      _wasOffline = false;
+      // Redirect to login page when connection is restored
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.pushReplacementNamed(context, 'login');
+      });
+    }
 
     bool isPlaying = audioProvider.isPlaying;
     bool isPaused = audioProvider.isPaused;
@@ -371,18 +388,64 @@ class IndexPageState extends State<IndexPage> with RouteAware {
           child: const CherryTopNavigation(),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            if (displayPlaylistsAndFavorites) ...[
-              FavoritePlaylists(getPlaylists: getPlaylists),
-              ...?getPlaylists.playlistsCategoryId?.map(
-                (categoryId) =>
-                    buildCategoryPlaylists(categoryId, getPlaylists),
+      body: Column(
+        children: [
+          if (!connectivityProvider.isOnline)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              color: Colors.red.withOpacity(0.1),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'No internet connection',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () async {
+                      await connectivityProvider.checkConnection();
+                      if (connectivityProvider.isOnline && mounted) {
+                        Navigator.pushReplacementNamed(context, 'login');
+                      }
+                    },
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                    ),
+                    child: const Text(
+                      'Check connection',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontSize: 12,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ],
-        ),
+            ),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  if (displayPlaylistsAndFavorites) ...[
+                    FavoritePlaylists(getPlaylists: getPlaylists),
+                    ...?getPlaylists.playlistsCategoryId?.map(
+                      (categoryId) =>
+                          buildCategoryPlaylists(categoryId, getPlaylists),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar:
           (isPlaying || isPaused) ? const AudioPlayerWidget() : null,
