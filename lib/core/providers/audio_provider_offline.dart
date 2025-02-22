@@ -54,6 +54,17 @@ class AudioProviderOffline extends ChangeNotifier {
         _updateCurrentTrackInfo();
       }
     });
+
+    // Add sequence state stream listener to update track info
+    _player.sequenceStateStream.listen((sequenceState) {
+      if (sequenceState != null && sequenceState.currentSource != null) {
+        final mediaItem = sequenceState.currentSource!.tag as MediaItem;
+        _currentPlayingSongName = '${mediaItem.album} - ${mediaItem.title}';
+        logger.d(
+            'Updated track info from sequence state: $_currentPlayingSongName');
+        notifyListeners();
+      }
+    });
   }
 
   void _updateCurrentTrackInfo() {
@@ -63,6 +74,24 @@ class AudioProviderOffline extends ChangeNotifier {
           '${currentTrack['artist']} - ${currentTrack['title']}';
       logger.d(
           'Updated current track: $_currentPlayingSongName (Index: $_currentTrackIndex)');
+
+      // Update global audio state
+      if (_context != null) {
+        try {
+          final globalAudioState =
+              Provider.of<GlobalAudioState>(_context!, listen: false);
+          globalAudioState.updateAudioState(
+            true,
+            _currentPlayingSongName,
+            _currentPlaylistId ?? 0,
+            _currentPlaylistTitle ?? "Unknown Playlist",
+            _currentPlaylistCover ?? "",
+          );
+        } catch (e) {
+          logger.e('Error updating global audio state: $e');
+        }
+      }
+
       notifyListeners();
     }
   }
