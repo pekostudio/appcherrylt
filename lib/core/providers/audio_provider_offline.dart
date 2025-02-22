@@ -30,6 +30,10 @@ class AudioProviderOffline extends ChangeNotifier {
   bool get isShuffled => _isShuffled;
   List<Map<String, dynamic>> _originalTracks = [];
 
+  // Add repeat state
+  bool _isRepeatEnabled = true; // Set to true by default for repeat all
+  bool get isRepeatEnabled => _isRepeatEnabled;
+
   bool get isPlaying => _isPlaying;
   bool get isPaused => _isPaused;
   String get currentPlayingSongName => _currentPlayingSongName;
@@ -48,8 +52,21 @@ class AudioProviderOffline extends ChangeNotifier {
       if (state.processingState == ProcessingState.completed &&
           _isPlaying &&
           !_isPaused) {
-        logger.d("Track completed, auto-loading next track.");
-        next();
+        logger.d("Track completed, handling next track with repeat mode.");
+        if (_currentTrackIndex + 1 >= _tracks.length) {
+          if (_isRepeatEnabled) {
+            // If we're at the end and repeat is enabled, go back to the first track
+            _currentTrackIndex = 0;
+            _player.seek(Duration.zero, index: 0);
+            _player.play();
+            logger.d("Playlist ended, repeating from first track");
+          } else {
+            logger.d("Playlist ended, stopping playback");
+            stop();
+          }
+        } else {
+          next();
+        }
       }
     });
 
@@ -141,7 +158,7 @@ class AudioProviderOffline extends ChangeNotifier {
     logger.d('Restored original track order');
   }
 
-  // Modify setOfflinePlaylist to include shuffle
+  // Modify setOfflinePlaylist to include shuffle and repeat
   Future<void> setOfflinePlaylist(List<Map<String, dynamic>> tracks) async {
     try {
       // Stop current playback and clear state
@@ -204,7 +221,9 @@ class AudioProviderOffline extends ChangeNotifier {
         return;
       }
 
-      // Set the audio source
+      // Set the audio source with repeat mode
+      await _player
+          .setLoopMode(LoopMode.all); // Enable repeat all at player level
       await _player.setAudioSource(
         ConcatenatingAudioSource(children: audioSources),
         initialIndex: 0,
@@ -213,7 +232,7 @@ class AudioProviderOffline extends ChangeNotifier {
 
       _updateCurrentTrackInfo();
       logger.d(
-          'Successfully set up shuffled playlist $playlistId with ${audioSources.length} tracks');
+          'Successfully set up shuffled playlist $playlistId with ${audioSources.length} tracks (Repeat ${_isRepeatEnabled ? 'enabled' : 'disabled'})');
 
       notifyListeners();
     } catch (e, stackTrace) {
@@ -268,6 +287,12 @@ class AudioProviderOffline extends ChangeNotifier {
       _currentTrackIndex++;
       _player.seekToNext();
       _player.play();
+    } else if (_isRepeatEnabled) {
+      // If at the end and repeat is enabled, go back to first track
+      _currentTrackIndex = 0;
+      _player.seek(Duration.zero, index: 0);
+      _player.play();
+      logger.d("Reached end of playlist, repeating from first track");
     } else {
       logger.d("No more tracks to play next.");
     }
@@ -348,6 +373,13 @@ class AudioProviderOffline extends ChangeNotifier {
     if (_tracks.isNotEmpty) {
       setOfflinePlaylist(_tracks);
     }
+  }
+
+  // Add toggle repeat method
+  void toggleRepeat() {
+    _isRepeatEnabled = !_isRepeatEnabled;
+    logger.d('Repeat mode ${_isRepeatEnabled ? 'enabled' : 'disabled'}');
+    notifyListeners();
   }
 
   @override
