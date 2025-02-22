@@ -146,7 +146,7 @@ class CustomBottomSheetState extends State<CustomBottomSheet> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'version 1.4.5',
+                'version 1.4.8',
                 style: TextStyle(
                   fontSize: 12,
                 ),
