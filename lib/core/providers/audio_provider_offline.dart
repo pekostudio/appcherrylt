@@ -25,6 +25,11 @@ class AudioProviderOffline extends ChangeNotifier {
   BuildContext? _context;
   final Logger logger = Logger();
 
+  // Add shuffle state
+  bool _isShuffled = false;
+  bool get isShuffled => _isShuffled;
+  List<Map<String, dynamic>> _originalTracks = [];
+
   bool get isPlaying => _isPlaying;
   bool get isPaused => _isPaused;
   String get currentPlayingSongName => _currentPlayingSongName;
@@ -108,6 +113,35 @@ class AudioProviderOffline extends ChangeNotifier {
         ),
       );
 
+  // Add shuffle method
+  void _shuffleTracks() {
+    if (_tracks.isEmpty) return;
+
+    // Store original track order if not already stored
+    if (_originalTracks.isEmpty) {
+      _originalTracks = List<Map<String, dynamic>>.from(_tracks);
+    }
+
+    // Create a copy of tracks to shuffle
+    final shuffledTracks = List<Map<String, dynamic>>.from(_tracks);
+    shuffledTracks.shuffle();
+    _tracks = shuffledTracks;
+    _isShuffled = true;
+    logger.d('Tracks shuffled. New order:');
+    for (var track in _tracks) {
+      logger.d('${track['artist']} - ${track['title']}');
+    }
+  }
+
+  // Add method to restore original order
+  void _restoreOriginalOrder() {
+    if (_originalTracks.isEmpty) return;
+    _tracks = List<Map<String, dynamic>>.from(_originalTracks);
+    _isShuffled = false;
+    logger.d('Restored original track order');
+  }
+
+  // Modify setOfflinePlaylist to include shuffle
   Future<void> setOfflinePlaylist(List<Map<String, dynamic>> tracks) async {
     try {
       // Stop current playback and clear state
@@ -116,6 +150,7 @@ class AudioProviderOffline extends ChangeNotifier {
       _isPaused = false;
       _currentTrackIndex = 0;
       _tracks.clear();
+      _originalTracks.clear();
       _playlist = ConcatenatingAudioSource(children: []);
 
       // Verify playlist ID from tracks
@@ -135,6 +170,9 @@ class AudioProviderOffline extends ChangeNotifier {
       _currentPlaylistId = playlistId;
       logger.d(
           'Setting up playlist ID: $playlistId with ${tracks.length} tracks');
+
+      // Shuffle tracks before creating audio sources
+      _shuffleTracks();
 
       // Create audio sources
       final audioSources = _tracks
@@ -175,7 +213,7 @@ class AudioProviderOffline extends ChangeNotifier {
 
       _updateCurrentTrackInfo();
       logger.d(
-          'Successfully set up playlist $playlistId with ${audioSources.length} tracks');
+          'Successfully set up shuffled playlist $playlistId with ${audioSources.length} tracks');
 
       notifyListeners();
     } catch (e, stackTrace) {
@@ -296,6 +334,20 @@ class AudioProviderOffline extends ChangeNotifier {
     _currentPlaylistTitle = title;
     _currentPlaylistCover = cover;
     notifyListeners();
+  }
+
+  // Add toggle shuffle method
+  void toggleShuffle() {
+    if (_isShuffled) {
+      _restoreOriginalOrder();
+    } else {
+      _shuffleTracks();
+    }
+
+    // Recreate the playlist with new order
+    if (_tracks.isNotEmpty) {
+      setOfflinePlaylist(_tracks);
+    }
   }
 
   @override
