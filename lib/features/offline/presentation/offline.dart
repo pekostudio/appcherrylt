@@ -1,9 +1,7 @@
-//import 'package:appcherrylt/core/providers/audio_provider.dart';
 import 'package:appcherrylt/core/providers/audio_provider_offline.dart';
 import 'package:appcherrylt/core/state/global_audio_state.dart';
-import 'package:appcherrylt/core/widgets/cherry_top_nav_offline.dart';
+import 'package:appcherrylt/core/widgets/cherry_top_nav.dart';
 import 'package:appcherrylt/core/widgets/media_controls_offline.dart';
-//import 'package:appcherrylt/features/audio/presentation/music_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:appcherrylt/features/offline/data/offline_playlist_data.dart';
@@ -110,9 +108,14 @@ class OfflinePlaylistsPageState extends State<OfflinePlaylistsPage> {
     final audioProvider = Provider.of<AudioProviderOffline>(context);
 
     return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: const CherryTopNavigationOffline(),
+      appBar: AppBar(
+        toolbarHeight: MediaQuery.of(context).size.height * 0.06,
+        automaticallyImplyLeading: false,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        elevation: 0,
+        flexibleSpace: SafeArea(
+          child: const CherryTopNavigation(),
+        ),
       ),
       body: offlinePlaylists.isEmpty
           ? const Center(
@@ -337,10 +340,16 @@ class OfflinePlaylistDetailPage extends StatelessWidget {
   });
 
   Future<void> _handleBack(BuildContext context) async {
-    await audioProvider.stop(); // Stop audio playback
-    audioProvider.dispose(); // Dispose the audio provider
+    await audioProvider.stop();
+    audioProvider.dispose();
     if (context.mounted) {
-      Navigator.pop(context);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const OfflinePlaylistsPage(),
+          settings: const RouteSettings(name: '/offline'),
+        ),
+      );
     }
   }
 
@@ -413,17 +422,14 @@ class OfflinePlaylistDetailPage extends StatelessWidget {
       },
       child: Scaffold(
         appBar: AppBar(
+          backgroundColor: Colors.transparent,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () => _handleBack(context),
           ),
-          title: Text(
-            playlist['name'],
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
         ),
         body: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             Center(
               child: Container(

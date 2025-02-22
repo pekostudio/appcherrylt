@@ -79,6 +79,9 @@ class AudioProvider extends ChangeNotifier {
 
   bool get isScheduled => _isScheduled;
 
+  bool _isInitialized = true;
+  bool get isInitialized => _isInitialized;
+
   AudioProvider(BuildContext context) {
     _context = context; // Save the context
     _player.playerStateStream.listen((state) {
@@ -631,6 +634,7 @@ class AudioProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isInitialized = false;
     _player.dispose();
     super.dispose();
   }
@@ -723,6 +727,13 @@ class AudioProvider extends ChangeNotifier {
     } catch (e) {
       logger.e('Error setting offline playlist: $e');
     }
+  }
+
+  Future<AudioProvider> initialize() async {
+    if (!_isInitialized) {
+      return AudioProvider(_context!); // Return new instance with context
+    }
+    return this;
   }
 }
 

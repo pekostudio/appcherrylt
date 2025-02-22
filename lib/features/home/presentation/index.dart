@@ -303,6 +303,14 @@ class IndexPageState extends State<IndexPage> with RouteAware {
 
     logger.d('Navigating to inner page with playlist: ${playlist.toString()}');
     final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+
+    // Create new instance if provider is disposed
+    if (!audioProvider.isInitialized) {
+      await audioProvider.initialize();
+      // Wait for initialization to complete
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
     audioProvider.setPlaylistDetails(playlist['id'] ?? 0,
         playlist['title'] ?? 'Unknown Playlist', playlist['cover'] ?? '',
         isScheduled: false);
