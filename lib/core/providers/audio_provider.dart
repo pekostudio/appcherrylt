@@ -82,9 +82,19 @@ class AudioProvider extends ChangeNotifier {
   bool _isInitialized = true;
   bool get isInitialized => _isInitialized;
 
+  // Add new variables for preloading
+  bool _isPreloading = false;
+  int _preloadedTrackIndex = -1;
+  static const int PRELOAD_BUFFER_SIZE = 2; // Number of tracks to preload ahead
+
   AudioProvider(BuildContext context) {
     _context = context; // Save the context
     _player.playerStateStream.listen((state) {
+      // Trigger preloading when playback starts
+      if (state.playing && !_isPreloading) {
+        _preloadNextTracks();
+      }
+
       if (state.processingState == ProcessingState.completed &&
           !_isInitialLoad &&
           _isPlaying &&
@@ -152,32 +162,33 @@ class AudioProvider extends ChangeNotifier {
       List<dynamic> tracks, BuildContext context, String coverUrl,
       {bool isScheduled = false}) async {
     _isLoading = true;
-    _isInitialLoad = true; // Add this flag to prevent auto-play during the load
+    _isInitialLoad = true;
     _isScheduledPlaylist = isScheduled;
     notifyListeners();
 
     _tracks = tracks;
     _currentTrackIndex = 0;
+    _preloadedTrackIndex = -1;
 
-    // Load audio sources in the background
+    // Load initial tracks and start preloading
     List<AudioSource> audioSources =
         await _loadInitialTracks(context, coverUrl);
 
-    // Clear previous playlist if any
     if (_playlist.length > 0) {
       await _playlist.clear();
     }
 
-    // Add loaded tracks to the playlist
     if (audioSources.isNotEmpty) {
       await _playlist.addAll(audioSources);
-      // Set the playlist but do not start playback yet
       await _player.setAudioSource(_playlist,
           initialIndex: 0, initialPosition: Duration.zero);
+
+      // Start preloading next tracks
+      _preloadNextTracks();
     }
 
     _isLoading = false;
-    _isInitialLoad = false; // Reset the flag after the load
+    _isInitialLoad = false;
     notifyListeners();
   }
 
@@ -185,8 +196,8 @@ class AudioProvider extends ChangeNotifier {
       BuildContext context, String coverUrl) async {
     List<AudioSource> audioSources = [];
 
-    // Load only the first track
-    int tracksToLoad = 1;
+    // Load first two tracks initially
+    int tracksToLoad = 2;
     for (int i = 0; i < tracksToLoad && i < _tracks.length; i++) {
       try {
         AudioSource audioSource =
@@ -240,33 +251,68 @@ class AudioProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> _preloadNextTracks() async {
+    if (_isPreloading || _currentTrackIndex >= _tracks.length - 1) return;
+
+    try {
+      _isPreloading = true;
+
+      // Calculate how many tracks we need to preload
+      int endIndex = _currentTrackIndex + PRELOAD_BUFFER_SIZE;
+      endIndex = endIndex >= _tracks.length ? _tracks.length - 1 : endIndex;
+
+      // Start from the next unloaded track
+      int startIndex = _playlist.length;
+
+      for (int i = startIndex; i <= endIndex; i++) {
+        if (i >= _tracks.length) break;
+
+        logger.d("Preloading track at index: $i");
+        AudioSource audioSource =
+            await _createAudioSource(_tracks[i], _playlistCover ?? '');
+        await _playlist.add(audioSource);
+        _preloadedTrackIndex = i;
+      }
+    } catch (e) {
+      logger.e("Error preloading tracks: $e");
+    } finally {
+      _isPreloading = false;
+    }
+  }
+
   Future<void> _loadNextTrack() async {
-    // Prevent loading if it's the initial load or player is not playing
     if (_isInitialLoad || !_player.playing) {
       logger.d("Initial load or player not playing. Skipping next track.");
       return;
     }
 
-    // Check if there is a next track to load
     if (_currentTrackIndex + 1 < _tracks.length) {
       try {
-        if (_currentTrackIndex + 1 >= _playlist.length) {
-          logger.d("Adding next track to the playlist.");
-          var nextSongData = _tracks[_currentTrackIndex + 1];
+        _currentTrackIndex++;
+
+        // If the next track is already preloaded, just seek to it
+        if (_currentTrackIndex < _playlist.length) {
+          logger.d("Playing preloaded track: $_currentTrackIndex");
+          await _player.seek(Duration.zero, index: _currentTrackIndex);
+          _player.play();
+
+          // Trigger preloading of more tracks
+          _preloadNextTracks();
+        } else {
+          // Fallback to loading the track if it wasn't preloaded
+          logger.d("Loading next track (not preloaded): $_currentTrackIndex");
+          var nextSongData = _tracks[_currentTrackIndex];
           AudioSource nextAudioSource =
               await _createAudioSource(nextSongData, _playlistCover ?? '');
           await _playlist.add(nextAudioSource);
+          await _player.seek(Duration.zero, index: _currentTrackIndex);
+          _player.play();
         }
-        _currentTrackIndex++;
-        logger.d("Seeking to next track: $_currentTrackIndex");
-        await _player.seek(Duration.zero, index: _currentTrackIndex);
-        _player.play();
-        logger.d("Playing next track: $_currentTrackIndex");
       } catch (e) {
-        logger.d("Error loading next track: $e");
+        logger.e("Error loading next track: $e");
       }
     } else {
-      logger.d("No more tracks to load.");
+      logger.d("No more tracks to play next.");
     }
   }
 
