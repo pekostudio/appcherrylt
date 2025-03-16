@@ -68,7 +68,7 @@ final cherryDarkTheme = ThemeData(
     secondary: const Color(0xFFD74248),
     surface: const Color(0xFF181818),
   ),
-  cardColor: const Color.fromARGB(255, 217, 88, 88),
+  cardColor: const Color.fromARGB(255, 43, 43, 43),
   textTheme: TextTheme(
     displayLarge: GoogleFonts.inter(
       fontSize: 72,
