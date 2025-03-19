@@ -41,11 +41,6 @@ class AudioProviderOffline extends ChangeNotifier {
   String? get currentPlaylistTitle => _currentPlaylistTitle;
   String? get currentPlaylistCover => _currentPlaylistCover;
 
-  var _playlist = ConcatenatingAudioSource(
-    useLazyPreparation: true,
-    children: [],
-  );
-
   AudioProviderOffline(BuildContext context) {
     _context = context;
     _player.playerStateStream.listen((state) {
@@ -168,7 +163,6 @@ class AudioProviderOffline extends ChangeNotifier {
       _currentTrackIndex = 0;
       _tracks.clear();
       _originalTracks.clear();
-      _playlist = ConcatenatingAudioSource(children: []);
 
       // Verify playlist ID from tracks
       if (tracks.isEmpty) {

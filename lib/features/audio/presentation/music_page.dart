@@ -95,14 +95,22 @@ class MusicPageState extends State<MusicPage> {
   Future<void> _checkSchedulerStatus() async {
     if (!mounted) return;
 
+    // Store context before async operation
+    final context = this.context;
+
     final getSchedule = Provider.of<GetSchedule>(context, listen: false);
     final schedulerProvider =
         Provider.of<SchedulerProvider>(context, listen: false);
     final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+    final userToken =
+        Provider.of<UserSession>(context, listen: false).globalToken;
 
     // Force refresh schedule data
-    await getSchedule.fetchSchedulerData(
-        Provider.of<UserSession>(context, listen: false).globalToken);
+    await getSchedule.fetchSchedulerData(userToken);
+
+    // Check if widget is still mounted before continuing
+    if (!mounted) return;
+
     schedulerProvider.setSchedule(getSchedule);
 
     final currentTime = DateTime.now();
@@ -140,6 +148,8 @@ class MusicPageState extends State<MusicPage> {
   Future<void> _initializeAndPlay() async {
     if (!mounted) return;
 
+    // Store context and providers before async operations
+    final context = this.context;
     final audioProvider = Provider.of<AudioProvider>(context, listen: false);
     final schedulerProvider =
         Provider.of<SchedulerProvider>(context, listen: false);
@@ -234,7 +244,7 @@ class MusicPageState extends State<MusicPage> {
               playlistId, widget.title, filePath);
           logger.d('Playlist marked as offline with cover path: $filePath');
 
-          if (context.mounted) {
+          if (mounted) {
             final offlinePage =
                 context.findAncestorStateOfType<OfflinePlaylistsPageState>();
             offlinePage?.refreshAfterDownload();
@@ -310,7 +320,7 @@ class MusicPageState extends State<MusicPage> {
                   borderRadius: BorderRadius.circular(16.0),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withAlpha(153),
                       blurRadius: 56,
                       offset: const Offset(0, 0),
                     ),
@@ -403,9 +413,11 @@ class MusicPageState extends State<MusicPage> {
                                         ElevatedButton(
                                           onPressed: () async {
                                             Navigator.of(context).pop();
+                                            // Store the current context before async operations
+                                            final currentContext = context;
                                             late BuildContext dialogContext;
                                             showDialog(
-                                              context: context,
+                                              context: currentContext,
                                               barrierDismissible: false,
                                               builder: (BuildContext context) {
                                                 dialogContext = context;
@@ -436,10 +448,10 @@ class MusicPageState extends State<MusicPage> {
 
                                             try {
                                               await Provider.of<GetTracks>(
-                                                      context,
+                                                      currentContext,
                                                       listen: false)
                                                   .downloadTracks(
-                                                context,
+                                                currentContext,
                                                 selectedCount,
                                                 widget.id,
                                               );
@@ -450,15 +462,18 @@ class MusicPageState extends State<MusicPage> {
                                             } catch (e) {
                                               logger.e(
                                                   'Error downloading tracks: $e');
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                      'Error downloading tracks: ${e.toString()}'),
-                                                  duration: const Duration(
-                                                      seconds: 3),
-                                                ),
-                                              );
+                                              if (mounted) {
+                                                ScaffoldMessenger.of(
+                                                        currentContext)
+                                                    .showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                        'Error downloading tracks: ${e.toString()}'),
+                                                    duration: const Duration(
+                                                        seconds: 3),
+                                                  ),
+                                                );
+                                              }
                                             } finally {
                                               Navigator.of(dialogContext).pop();
                                             }

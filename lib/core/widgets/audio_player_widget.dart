@@ -60,7 +60,7 @@ class AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black
-                                      .withOpacity(0.6), // Shadow color
+                                      .withAlpha(153), // Shadow color
                                   blurRadius: 56, // Spread of the shadow
                                   offset: const Offset(
                                       0, 0), // Position of the shadow
@@ -124,7 +124,7 @@ class AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                             borderRadius: BorderRadius.circular(8.0),
                             child: ColorFiltered(
                               colorFilter: ColorFilter.mode(
-                                Colors.black.withOpacity(0.3),
+                                Colors.black.withAlpha(76),
                                 BlendMode.darken,
                               ),
                               child: Image.network(

@@ -150,7 +150,7 @@ class IndexPageState extends State<IndexPage> with RouteAware {
 
       // Handle ads
       final currentAd = schedulerProvider.getCurrentAd();
-      if (currentAd?.tracks?.isNotEmpty == true) {
+      if (currentAd?.tracks?.isNotEmpty == true && mounted) {
         final adsProvider = Provider.of<AdsProvider>(context, listen: false);
         adsProvider.setContext(context);
         try {
@@ -318,6 +318,8 @@ class IndexPageState extends State<IndexPage> with RouteAware {
       await Future.delayed(const Duration(milliseconds: 100));
     }
 
+    if (!mounted) return;
+
     audioProvider.setPlaylistDetails(playlist['id'] ?? 0,
         playlist['title'] ?? 'Unknown Playlist', playlist['cover'] ?? '',
         isScheduled: false);
@@ -394,7 +396,7 @@ class IndexPageState extends State<IndexPage> with RouteAware {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              color: Colors.red.withOpacity(0.1),
+              color: Colors.red.withAlpha(26),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -411,7 +413,7 @@ class IndexPageState extends State<IndexPage> with RouteAware {
                     onPressed: () async {
                       await connectivityProvider.checkConnection();
                       if (connectivityProvider.isOnline && mounted) {
-                        Navigator.pushReplacementNamed(context, 'login');
+                        Navigator.of(context).pushReplacementNamed('login');
                       }
                     },
                     style: TextButton.styleFrom(

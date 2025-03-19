@@ -102,7 +102,7 @@ class GetSchedule extends ChangeNotifier {
           schedule.start!.compareTo(currentTime) <= 0 &&
           schedule.end!.compareTo(currentTime) >
               0, // Changed >= to > for end time
-      orElse: () => null as ScheduleItem,
+      orElse: () => ScheduleItem(),
     );
   }
 
@@ -118,7 +118,7 @@ class GetSchedule extends ChangeNotifier {
 
     return todaySchedules?.firstWhere(
       (schedule) => schedule.start!.compareTo(currentTime) > 0,
-      orElse: () => null as ScheduleItem,
+      orElse: () => ScheduleItem(),
     );
   }
 }

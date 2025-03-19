@@ -84,8 +84,7 @@ class AudioProvider extends ChangeNotifier {
 
   // Add new variables for preloading
   bool _isPreloading = false;
-  int _preloadedTrackIndex = -1;
-  static const int PRELOAD_BUFFER_SIZE = 2; // Number of tracks to preload ahead
+  static const int preloadBufferSize = 2; // Number of tracks to preload ahead
 
   AudioProvider(BuildContext context) {
     _context = context; // Save the context
@@ -168,7 +167,6 @@ class AudioProvider extends ChangeNotifier {
 
     _tracks = tracks;
     _currentTrackIndex = 0;
-    _preloadedTrackIndex = -1;
 
     // Load initial tracks and start preloading
     List<AudioSource> audioSources =
@@ -258,7 +256,7 @@ class AudioProvider extends ChangeNotifier {
       _isPreloading = true;
 
       // Calculate how many tracks we need to preload
-      int endIndex = _currentTrackIndex + PRELOAD_BUFFER_SIZE;
+      int endIndex = _currentTrackIndex + preloadBufferSize;
       endIndex = endIndex >= _tracks.length ? _tracks.length - 1 : endIndex;
 
       // Start from the next unloaded track
@@ -271,7 +269,6 @@ class AudioProvider extends ChangeNotifier {
         AudioSource audioSource =
             await _createAudioSource(_tracks[i], _playlistCover ?? '');
         await _playlist.add(audioSource);
-        _preloadedTrackIndex = i;
       }
     } catch (e) {
       logger.e("Error preloading tracks: $e");
