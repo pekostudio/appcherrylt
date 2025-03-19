@@ -23,12 +23,12 @@ class DownloadService {
 
         if (isAndroid13Plus) {
           logger.d('Checking current audio permission status');
-          var currentStatus = await Permission.audio.status;
-          logger.d('Current audio permission status: $currentStatus');
+          var audioStatus = await Permission.audio.status;
+          logger.d('Current audio permission status: $audioStatus');
 
-          if (!currentStatus.isGranted) {
+          if (!audioStatus.isGranted) {
             logger.d('Requesting audio permission for Android 13+');
-            var audioStatus = await Permission.audio.request();
+            audioStatus = await Permission.audio.request();
             logger.d('Audio permission request result: $audioStatus');
 
             if (!audioStatus.isGranted) {
@@ -39,14 +39,34 @@ class DownloadService {
           } else {
             logger.d('Audio permission already granted');
           }
-        } else {
-          logger.d('Checking current storage permission status');
-          var currentStatus = await Permission.storage.status;
-          logger.d('Current storage permission status: $currentStatus');
+        } else if (await _isAndroid10OrHigher() &&
+            !await _isAndroid13OrHigher()) {
+          // For Android 10-12, we need READ_MEDIA permissions
+          logger.d('Checking media permissions for Android 10-12');
+          var mediaImagesStatus = await Permission.photos.status;
 
-          if (!currentStatus.isGranted) {
-            logger.d('Requesting storage permission for Android 12 or below');
-            var storageStatus = await Permission.storage.request();
+          if (!mediaImagesStatus.isGranted) {
+            logger.d('Requesting photos permission for Android 10-12');
+            mediaImagesStatus = await Permission.photos.request();
+            logger.d('Photos permission request result: $mediaImagesStatus');
+
+            if (!mediaImagesStatus.isGranted) {
+              logger.e(
+                  'Photos permission not granted. Status: $mediaImagesStatus');
+              throw Exception(
+                  "Photos permission required to download content. Please grant permission in settings.");
+            }
+          }
+        } else {
+          // For Android 9 and below
+          logger
+              .d('Checking storage permission status for Android 9 and below');
+          var storageStatus = await Permission.storage.status;
+          logger.d('Current storage permission status: $storageStatus');
+
+          if (!storageStatus.isGranted) {
+            logger.d('Requesting storage permission for Android 9 or below');
+            storageStatus = await Permission.storage.request();
             logger.d('Storage permission request result: $storageStatus');
 
             if (!storageStatus.isGranted) {
@@ -61,7 +81,7 @@ class DownloadService {
         }
       }
 
-      logger.d('Getting application documents directory');
+      // Get the appropriate directory based on platform
       final directory = await getApplicationDocumentsDirectory();
       logger.d('App storage directory path: ${directory.path}');
 
@@ -167,6 +187,21 @@ class DownloadService {
         final sdkInt = androidInfo.version.sdkInt;
         logger.d('Android SDK version: $sdkInt');
         return sdkInt >= 33;
+      }
+      return false;
+    } catch (e) {
+      logger.e('Error checking Android version: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _isAndroid10OrHigher() async {
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await DeviceInfoPlugin().androidInfo;
+        final sdkInt = androidInfo.version.sdkInt;
+        logger.d('Android SDK version: $sdkInt');
+        return sdkInt >= 29;
       }
       return false;
     } catch (e) {
