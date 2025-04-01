@@ -8,7 +8,7 @@ class ForgotPasswordLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => openUrl('https://app.cherrymusic.com/en/lost-password/'),
+      onTap: () => openUrl('https://app.cherrymusic.lt/prarastas-slaptazodis/'),
       child: Text(
         'Forgot Password?',
         style: GoogleFonts.radioCanada(

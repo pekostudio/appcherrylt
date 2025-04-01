@@ -416,6 +416,8 @@ class MusicPageState extends State<MusicPage> {
                                             // Store the current context before async operations
                                             final currentContext = context;
                                             late BuildContext dialogContext;
+
+                                            // Show download progress dialog
                                             showDialog(
                                               context: currentContext,
                                               barrierDismissible: false,
@@ -447,22 +449,70 @@ class MusicPageState extends State<MusicPage> {
                                             );
 
                                             try {
-                                              await Provider.of<GetTracks>(
+                                              // Make sure GetTracks provider is accessible
+                                              final getTracksProvider =
+                                                  Provider.of<GetTracks>(
                                                       currentContext,
-                                                      listen: false)
+                                                      listen: false);
+
+                                              // Make sure UserSession is authenticated
+                                              final userSession =
+                                                  Provider.of<UserSession>(
+                                                      currentContext,
+                                                      listen: false);
+
+                                              if (userSession
+                                                  .globalToken.isEmpty) {
+                                                throw Exception(
+                                                    "User not logged in or session expired");
+                                              }
+
+                                              // Start download process
+                                              logger.d(
+                                                  'Starting download of $selectedCount tracks from playlist ${widget.id}');
+                                              await getTracksProvider
                                                   .downloadTracks(
                                                 currentContext,
                                                 selectedCount,
                                                 widget.id,
                                               );
+
+                                              // Download cover image
+                                              logger.d(
+                                                  'Downloading cover image: ${widget.cover}');
                                               await _downloadCoverImage(
                                                   widget.cover, widget.id);
+
+                                              // Close progress dialog
+                                              if (mounted) {
+                                                Navigator.of(dialogContext)
+                                                    .pop();
+
+                                                // Show success message
+                                                ScaffoldMessenger.of(
+                                                        currentContext)
+                                                    .showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                        'Playlist downloaded successfully for offline use'),
+                                                    duration:
+                                                        Duration(seconds: 3),
+                                                  ),
+                                                );
+                                              }
+
                                               logger.d(
                                                   'Playlist marked as offline: ${widget.id}');
                                             } catch (e) {
                                               logger.e(
                                                   'Error downloading tracks: $e');
+                                              // Close progress dialog
                                               if (mounted) {
+                                                // Close the progress dialog
+                                                Navigator.of(dialogContext)
+                                                    .pop();
+
+                                                // Show error message
                                                 ScaffoldMessenger.of(
                                                         currentContext)
                                                     .showSnackBar(
@@ -471,11 +521,10 @@ class MusicPageState extends State<MusicPage> {
                                                         'Error downloading tracks: ${e.toString()}'),
                                                     duration: const Duration(
                                                         seconds: 3),
+                                                    backgroundColor: Colors.red,
                                                   ),
                                                 );
                                               }
-                                            } finally {
-                                              Navigator.of(dialogContext).pop();
                                             }
                                           },
                                           child: const Text('Download'),

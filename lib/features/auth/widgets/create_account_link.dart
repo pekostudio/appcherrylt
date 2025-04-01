@@ -8,7 +8,7 @@ class CreateAccountLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => openUrl('https://app.cherrymusic.com/plan/'),
+      onTap: () => openUrl('https://cherrymusic.lt/registruotis/'),
       child: Text(
         'Create New Account',
         style: GoogleFonts.radioCanada(
