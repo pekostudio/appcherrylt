@@ -1,0 +1,2 @@
+/Users/andrius/Documents/GitHub/appcherrylt/android/app/.cxx/RelWithDebInfo/733c404y/armeabi-v7a/CMakeFiles/edit_cache.dir
+/Users/andrius/Documents/GitHub/appcherrylt/android/app/.cxx/RelWithDebInfo/733c404y/armeabi-v7a/CMakeFiles/rebuild_cache.dir
