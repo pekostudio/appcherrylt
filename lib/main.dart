@@ -5,7 +5,6 @@ import 'package:appcherrylt/features/auth/presentation/login.dart';
 import 'package:appcherrylt/features/home/presentation/index.dart';
 import 'package:appcherrylt/config/theme_notifier.dart';
 import 'package:appcherrylt/core/providers/audio_provider.dart';
-import 'package:appcherrylt/core/providers/audio_provider_offline.dart';
 import 'package:appcherrylt/core/providers/ads_provider.dart';
 import 'package:appcherrylt/core/models/user_session.dart';
 import 'package:appcherrylt/features/home/data/get_playlists.dart';
@@ -37,8 +36,6 @@ void main() async {
             create: (_) => GlobalAudioState(
                 'https://cherrymusic.lt/files/cherry-music-muzika-verslui-stylish-shopping.jpeg')),
         ChangeNotifierProvider(create: (context) => AudioProvider(context)),
-        ChangeNotifierProvider(
-            create: (context) => AudioProviderOffline(context)),
         ChangeNotifierProxyProvider<AudioProvider, AdsProvider>(
           create: (context) =>
               AdsProvider(Provider.of<AudioProvider>(context, listen: false)),
