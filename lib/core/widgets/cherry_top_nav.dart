@@ -1,21 +1,13 @@
 import 'package:appcherrylt/config/theme.dart';
 import 'package:appcherrylt/config/theme_notifier.dart';
 import 'package:appcherrylt/core/widgets/custom_bottom_sheet.dart';
-import 'package:appcherrylt/features/offline/presentation/offline.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
-import 'package:appcherrylt/features/home/presentation/index.dart';
-import 'package:appcherrylt/core/providers/audio_provider.dart';
-import 'package:appcherrylt/core/providers/audio_provider_offline.dart';
-//import 'package:appcherrylt/core/providers/connectivity_provider.dart';
 
 class CherryTopNavigation extends StatefulWidget {
-  final bool? isOffline;
-
   const CherryTopNavigation({
     super.key,
-    this.isOffline,
   });
 
   @override
@@ -24,15 +16,12 @@ class CherryTopNavigation extends StatefulWidget {
 
 class CherryTopNavigationState extends State<CherryTopNavigation> {
   bool _darkModeSwitch = false; // For theme switching
-  bool _isOfflineMode = false; // For online/offline switching
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       setState(() {
-        _isOfflineMode = widget.isOffline ??
-            ModalRoute.of(context)?.settings.name == '/offline';
         // Get initial theme state
         _darkModeSwitch = Theme.of(context).brightness == Brightness.dark;
       });
@@ -109,68 +98,10 @@ class CherryTopNavigationState extends State<CherryTopNavigation> {
             'assets/images/cherrymusic-logo-white.svg',
             width: screenHeight * 0.20,
           ),
+          // Empty SizedBox to maintain spacing where the switch was
           SizedBox(
             width: screenHeight * 0.06,
             height: screenHeight * 0.04,
-            child: Stack(
-              children: [
-                Switch(
-                  value: _isOfflineMode,
-                  onChanged: (bool value) async {
-                    setState(() {
-                      _isOfflineMode = value;
-                    });
-                    if (value) {
-                      // Only stop online audio player before navigating to offline
-                      final audioProvider =
-                          Provider.of<AudioProvider>(context, listen: false);
-                      await audioProvider.stop();
-
-                      if (context.mounted) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const OfflinePlaylistsPage(),
-                            settings: const RouteSettings(name: '/offline'),
-                          ),
-                        );
-                      }
-                    } else {
-                      // Only stop offline audio player before navigating to online
-                      final audioProviderOffline =
-                          Provider.of<AudioProviderOffline>(context,
-                              listen: false);
-                      await audioProviderOffline.stop();
-
-                      if (context.mounted) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const IndexPage(),
-                            settings: const RouteSettings(name: '/'),
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  activeColor: Colors.red,
-                  inactiveThumbColor: Colors.green,
-                ),
-                Positioned(
-                  left: _isOfflineMode ? 7 : 27,
-                  top: 10,
-                  child: Text(
-                    _isOfflineMode ? 'Off' : 'On',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: _isOfflineMode
-                          ? Colors.white
-                          : Theme.of(context).textTheme.bodySmall?.color,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
       ),

@@ -1,14 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:appcherrylt/core/models/favourites.dart';
-import 'package:appcherrylt/core/models/get_tracks.dart';
 import 'package:appcherrylt/core/models/user_session.dart';
 import 'package:appcherrylt/core/providers/audio_provider.dart';
 import 'package:appcherrylt/core/providers/scheduler_provider.dart';
 import 'package:appcherrylt/core/widgets/audio_player_widget.dart';
 import 'package:appcherrylt/core/widgets/favourite_toggle_icon.dart';
 import 'package:appcherrylt/features/home/presentation/index.dart';
-import 'package:appcherrylt/features/offline/data/offline_playlist_data.dart';
 import 'package:appcherrylt/features/scheduler/data/get_scheduler.dart';
 import 'package:appcherrylt/features/scheduler/presentation/index.dart';
 import 'package:flutter/material.dart';
@@ -16,12 +13,8 @@ import 'package:flutter_svg/svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:logger/logger.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:appcherrylt/features/audio/presentation/music_page_helpers.dart';
-import 'package:http/http.dart' as http;
-//import 'package:intl/intl.dart';
-import 'package:appcherrylt/features/offline/presentation/offline.dart';
 
 class MusicPage extends StatefulWidget {
   final int id;
@@ -221,46 +214,6 @@ class MusicPageState extends State<MusicPage> {
     logger.d('Toggled favorite status for playlist ${widget.id}: $isFavorite');
   }
 
-  // Download cover image
-  Future<void> _downloadCoverImage(String url, int playlistId) async {
-    try {
-      logger.d('Starting download of cover image from $url');
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final directory = await getApplicationDocumentsDirectory();
-        final playlistDir = Directory('${directory.path}/$playlistId');
-        if (!await playlistDir.exists()) {
-          await playlistDir.create(recursive: true);
-        }
-        final filePath = '${playlistDir.path}/cover.jpg';
-        final file = File(filePath);
-        await file.writeAsBytes(response.bodyBytes);
-        logger.d('Cover image downloaded and saved to $filePath');
-
-        // Verify file was written successfully
-        if (await file.exists()) {
-          // Now save the local file path and playlist info
-          await OfflinePlaylistData.markPlaylistAsOffline(
-              playlistId, widget.title, filePath);
-          logger.d('Playlist marked as offline with cover path: $filePath');
-
-          if (mounted) {
-            final offlinePage =
-                context.findAncestorStateOfType<OfflinePlaylistsPageState>();
-            offlinePage?.refreshAfterDownload();
-          }
-        } else {
-          logger.e('Failed to write cover image file');
-        }
-      } else {
-        logger.e(
-            'Failed to download cover image. Status code: ${response.statusCode}');
-      }
-    } catch (e) {
-      logger.e('Error downloading cover image: $e');
-    }
-  }
-
   // Display back button if there is NO scheduled playlists
   bool _shouldShowBackButton() {
     logger.d('Checking back button visibility:');
@@ -347,197 +300,18 @@ class MusicPageState extends State<MusicPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Left-aligned Favorite and Download icons
-                    Row(
-                      children: [
-                        // Favorite Icon
-                        CircleAvatar(
-                          backgroundColor:
-                              const Color.fromARGB(255, 242, 242, 242),
-                          child: FavoriteToggleIcon(
-                            playlistId: widget.id,
-                            isFavorite: isFavorite,
-                            onToggle: (bool newFavoriteStatus) {
-                              setState(() {
-                                isFavorite = newFavoriteStatus;
-                              });
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 16), // Spacing between icons
-
-                        // Download Icon
-                        IconButton(
-                          icon: Icon(
-                            Icons.download,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (BuildContext context) {
-                                int selectedCount = 0;
-
-                                return StatefulBuilder(
-                                  builder: (BuildContext context,
-                                      StateSetter setState) {
-                                    return AlertDialog(
-                                      title: const Text('Download Tracks'),
-                                      content: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Text(
-                                              'Select the number of tracks to download'),
-                                          const SizedBox(height: 16),
-                                          Slider(
-                                            value: selectedCount.toDouble(),
-                                            min: 0,
-                                            max: 30,
-                                            divisions: 29,
-                                            label: selectedCount.toString(),
-                                            onChanged: (double value) {
-                                              setState(() {
-                                                selectedCount = value.toInt();
-                                              });
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () {
-                                            Navigator.of(context).pop();
-                                          },
-                                          child: const Text('Cancel'),
-                                        ),
-                                        ElevatedButton(
-                                          onPressed: () async {
-                                            Navigator.of(context).pop();
-                                            // Store the current context before async operations
-                                            final currentContext = context;
-                                            late BuildContext dialogContext;
-
-                                            // Show download progress dialog
-                                            showDialog(
-                                              context: currentContext,
-                                              barrierDismissible: false,
-                                              builder: (BuildContext context) {
-                                                dialogContext = context;
-                                                return StreamBuilder<int>(
-                                                  stream: Provider.of<
-                                                              GetTracks>(
-                                                          context,
-                                                          listen: false)
-                                                      .downloadProgressStream,
-                                                  builder: (context, snapshot) {
-                                                    return AlertDialog(
-                                                      content: Column(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          const CircularProgressIndicator(),
-                                                          const SizedBox(
-                                                              height: 16),
-                                                          Text(
-                                                              'Downloading tracks: ${snapshot.data ?? 0}/$selectedCount'),
-                                                        ],
-                                                      ),
-                                                    );
-                                                  },
-                                                );
-                                              },
-                                            );
-
-                                            try {
-                                              // Make sure GetTracks provider is accessible
-                                              final getTracksProvider =
-                                                  Provider.of<GetTracks>(
-                                                      currentContext,
-                                                      listen: false);
-
-                                              // Make sure UserSession is authenticated
-                                              final userSession =
-                                                  Provider.of<UserSession>(
-                                                      currentContext,
-                                                      listen: false);
-
-                                              if (userSession
-                                                  .globalToken.isEmpty) {
-                                                throw Exception(
-                                                    "User not logged in or session expired");
-                                              }
-
-                                              // Start download process
-                                              logger.d(
-                                                  'Starting download of $selectedCount tracks from playlist ${widget.id}');
-                                              await getTracksProvider
-                                                  .downloadTracks(
-                                                currentContext,
-                                                selectedCount,
-                                                widget.id,
-                                              );
-
-                                              // Download cover image
-                                              logger.d(
-                                                  'Downloading cover image: ${widget.cover}');
-                                              await _downloadCoverImage(
-                                                  widget.cover, widget.id);
-
-                                              // Close progress dialog
-                                              if (mounted) {
-                                                Navigator.of(dialogContext)
-                                                    .pop();
-
-                                                // Show success message
-                                                ScaffoldMessenger.of(
-                                                        currentContext)
-                                                    .showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                        'Playlist downloaded successfully for offline use'),
-                                                    duration:
-                                                        Duration(seconds: 3),
-                                                  ),
-                                                );
-                                              }
-
-                                              logger.d(
-                                                  'Playlist marked as offline: ${widget.id}');
-                                            } catch (e) {
-                                              logger.e(
-                                                  'Error downloading tracks: $e');
-                                              // Close progress dialog
-                                              if (mounted) {
-                                                // Close the progress dialog
-                                                Navigator.of(dialogContext)
-                                                    .pop();
-
-                                                // Show error message
-                                                ScaffoldMessenger.of(
-                                                        currentContext)
-                                                    .showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                        'Error downloading tracks: ${e.toString()}'),
-                                                    duration: const Duration(
-                                                        seconds: 3),
-                                                    backgroundColor: Colors.red,
-                                                  ),
-                                                );
-                                              }
-                                            }
-                                          },
-                                          child: const Text('Download'),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      ],
+                    // Left-aligned Favorite Icon
+                    CircleAvatar(
+                      backgroundColor: const Color.fromARGB(255, 242, 242, 242),
+                      child: FavoriteToggleIcon(
+                        playlistId: widget.id,
+                        isFavorite: isFavorite,
+                        onToggle: (bool newFavoriteStatus) {
+                          setState(() {
+                            isFavorite = newFavoriteStatus;
+                          });
+                        },
+                      ),
                     ),
                     // Right-aligned Play Button
                     IconButton(
