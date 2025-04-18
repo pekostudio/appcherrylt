@@ -58,8 +58,8 @@ class CherryTopNavigationState extends State<CherryTopNavigation> {
       builder: (BuildContext context) {
         return SafeArea(
           child: CustomBottomSheet(
-            text1: 'Dark mode',
-            text2: 'Log out',
+            text1: 'Tamsus režimas',
+            text2: 'Atsijungti',
             initialSwitchValue: _darkModeSwitch, // Pass dark mode state
             onSwitchChanged: _onDarkModeChanged, // Pass dark mode handler
             icon2: Icons.logout,

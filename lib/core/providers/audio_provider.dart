@@ -194,18 +194,24 @@ class AudioProvider extends ChangeNotifier {
       BuildContext context, String coverUrl) async {
     List<AudioSource> audioSources = [];
 
-    // Load first two tracks initially
-    int tracksToLoad = 2;
+    // Load first five tracks initially instead of just two
+    int tracksToLoad = 5;
+    logger.d(
+        "Loading initial $tracksToLoad tracks from playlist of ${_tracks.length} tracks");
+
     for (int i = 0; i < tracksToLoad && i < _tracks.length; i++) {
       try {
+        logger.d("Loading initial track at index: $i");
         AudioSource audioSource =
             await _createAudioSource(_tracks[i], coverUrl);
         audioSources.add(audioSource);
+        logger.d("Successfully loaded initial track at index: $i");
       } catch (e) {
-        logger.d("Error loading track: $e");
+        logger.e("Error loading initial track at index $i: $e", error: e);
       }
     }
 
+    logger.d("Finished loading ${audioSources.length} initial tracks");
     return audioSources;
   }
 
@@ -259,16 +265,30 @@ class AudioProvider extends ChangeNotifier {
       int endIndex = _currentTrackIndex + preloadBufferSize;
       endIndex = endIndex >= _tracks.length ? _tracks.length - 1 : endIndex;
 
-      // Start from the next unloaded track
+      // Start from the next unloaded track - this part was problematic
+      // Check if there are already tracks in the playlist
       int startIndex = _playlist.length;
 
-      for (int i = startIndex; i <= endIndex; i++) {
-        if (i >= _tracks.length) break;
+      // Debug logging
+      logger.d(
+          "Preloading tracks: startIndex=$startIndex, endIndex=$endIndex, current playlist size=${_playlist.length}, total tracks=${_tracks.length}");
 
-        logger.d("Preloading track at index: $i");
-        AudioSource audioSource =
-            await _createAudioSource(_tracks[i], _playlistCover ?? '');
-        await _playlist.add(audioSource);
+      // Make sure we don't skip any tracks in the sequence
+      if (startIndex <= endIndex) {
+        for (int i = startIndex; i <= endIndex; i++) {
+          if (i >= _tracks.length) break;
+
+          logger.d("Preloading track at index: $i");
+          try {
+            AudioSource audioSource =
+                await _createAudioSource(_tracks[i], _playlistCover ?? '');
+            await _playlist.add(audioSource);
+            logger.d(
+                "Successfully added track $i to playlist. New playlist size: ${_playlist.length}");
+          } catch (e) {
+            logger.e("Error preloading track at index $i: $e");
+          }
+        }
       }
     } catch (e) {
       logger.e("Error preloading tracks: $e");
@@ -286,6 +306,8 @@ class AudioProvider extends ChangeNotifier {
     if (_currentTrackIndex + 1 < _tracks.length) {
       try {
         _currentTrackIndex++;
+        logger
+            .d("Loading next track: $_currentTrackIndex of ${_tracks.length}");
 
         // If the next track is already preloaded, just seek to it
         if (_currentTrackIndex < _playlist.length) {
@@ -297,19 +319,36 @@ class AudioProvider extends ChangeNotifier {
           _preloadNextTracks();
         } else {
           // Fallback to loading the track if it wasn't preloaded
-          logger.d("Loading next track (not preloaded): $_currentTrackIndex");
+          logger.d("Track $_currentTrackIndex not preloaded, loading now...");
           var nextSongData = _tracks[_currentTrackIndex];
           AudioSource nextAudioSource =
               await _createAudioSource(nextSongData, _playlistCover ?? '');
           await _playlist.add(nextAudioSource);
+          logger.d(
+              "Added track $_currentTrackIndex to playlist. New size: ${_playlist.length}");
           await _player.seek(Duration.zero, index: _currentTrackIndex);
           _player.play();
+
+          // Also trigger preloading of more tracks since we had to load this one manually
+          _preloadNextTracks();
         }
       } catch (e) {
-        logger.e("Error loading next track: $e");
+        logger.e("Error loading next track: $e", error: e);
+        // If there's an error with the current track, try to move to the next one
+        if (_currentTrackIndex + 1 < _tracks.length) {
+          logger
+              .d("Attempting to skip problematic track and load the next one");
+          _currentTrackIndex++;
+          _loadNextTrack();
+        }
       }
     } else {
-      logger.d("No more tracks to play next.");
+      logger.d(
+          "No more tracks to play next. Reached end of playlist (${_tracks.length} tracks)");
+      // Optionally, loop back to the beginning of the playlist
+      // _currentTrackIndex = 0;
+      // await _player.seek(Duration.zero, index: 0);
+      // _player.play();
     }
   }
 
@@ -517,12 +556,52 @@ class AudioProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void next() {
-    logger.d("Next button pressed");
+  void next() async {
+    logger.d(
+        "Next button pressed. Current index: $_currentTrackIndex, Total tracks: ${_tracks.length}");
     if (_currentTrackIndex + 1 < _tracks.length) {
-      _loadNextTrack();
+      try {
+        _currentTrackIndex++;
+
+        // Check if the track is already loaded in the playlist
+        if (_currentTrackIndex < _playlist.length) {
+          logger.d(
+              "Playing next track from playlist at index $_currentTrackIndex");
+          await _player.seek(Duration.zero, index: _currentTrackIndex);
+          _player.play();
+
+          // Trigger preloading more tracks after advancing
+          _preloadNextTracks();
+        } else {
+          // Need to manually load this track
+          logger.d("Manually loading next track at index $_currentTrackIndex");
+
+          // Load the next track
+          var nextSongData = _tracks[_currentTrackIndex];
+          AudioSource nextAudioSource =
+              await _createAudioSource(nextSongData, _playlistCover ?? '');
+          await _playlist.add(nextAudioSource);
+
+          // Seek and play
+          await _player.seek(Duration.zero, index: _currentTrackIndex);
+          _player.play();
+
+          // Trigger preloading of additional tracks
+          _preloadNextTracks();
+        }
+
+        // Update UI
+        notifyListeners();
+      } catch (e) {
+        logger.e("Error advancing to next track: $e", error: e);
+        // If there was an error, try to skip to the next track if available
+        if (_currentTrackIndex + 1 < _tracks.length) {
+          _currentTrackIndex++;
+          next(); // Recursive call to try the next track
+        }
+      }
     } else {
-      logger.d("No more tracks to play next.");
+      logger.d("Reached end of playlist. No more tracks to play next.");
     }
   }
 

@@ -50,7 +50,7 @@ class LoginPage extends StatelessWidget {
                       onPressed: () => _launchUrl(
                           'https://app.cherrymusic.lt/prarastas-slaptazodis/'),
                       child: Text(
-                        'Forgot Password?',
+                        'Pamiršote slaptažodį?',
                         style: GoogleFonts.radioCanada(
                           fontSize: 14,
                           fontWeight: FontWeight.normal,
@@ -63,7 +63,7 @@ class LoginPage extends StatelessWidget {
                       onPressed: () =>
                           _launchUrl('https://cherrymusic.lt/registruotis/'),
                       child: Text(
-                        'Create New Account',
+                        'Sukūrti naują paskyrą',
                         style: GoogleFonts.radioCanada(
                           fontSize: 14,
                           fontWeight: FontWeight.normal,

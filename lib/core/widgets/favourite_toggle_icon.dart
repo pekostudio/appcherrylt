@@ -48,8 +48,8 @@ class FavoriteToggleIcon extends StatelessWidget {
                     content: Text(
                       textAlign: TextAlign.center,
                       newFavoriteStatus
-                          ? 'Added to favorites'
-                          : 'Removed from favorites',
+                          ? 'Pridėtas prie mėgstamiausių'
+                          : 'Ištrintas iš mėgstamiausių',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,

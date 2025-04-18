@@ -61,7 +61,7 @@ class NowPlayingWidget extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8.0),
                         child: ColorFiltered(
                           colorFilter: ColorFilter.mode(
-                            Colors.black.withOpacity(0.3),
+                            Colors.black.withAlpha(77),
                             BlendMode.darken,
                           ),
                           child: Image.network(

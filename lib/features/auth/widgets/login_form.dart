@@ -40,7 +40,7 @@ class LoginFormState extends State<LoginForm> {
             TextFormField(
               controller: _loginController,
               decoration: InputDecoration(
-                hintText: 'Login',
+                hintText: 'Vartotojas',
                 prefixIcon:
                     const Icon(Icons.email_outlined, color: Colors.grey),
                 filled: true,
@@ -56,7 +56,7 @@ class LoginFormState extends State<LoginForm> {
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Please enter your login';
+                  return 'Prašome įvesti savo prisijungimo vardą';
                 }
                 return null;
               },
@@ -66,7 +66,7 @@ class LoginFormState extends State<LoginForm> {
               controller: _passwordController,
               obscureText: _obscureText,
               decoration: InputDecoration(
-                hintText: 'Password',
+                hintText: 'Slaptažodis',
                 prefixIcon: const Icon(Icons.key_outlined, color: Colors.grey),
                 suffixIcon: IconButton(
                   icon: Icon(
@@ -92,7 +92,7 @@ class LoginFormState extends State<LoginForm> {
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return 'Please enter your password';
+                  return 'Prašome įvesti savo slaptažodį';
                 }
                 return null;
               },
@@ -127,7 +127,7 @@ class LoginFormState extends State<LoginForm> {
                         strokeWidth: 2,
                       ),
                     )
-                  : const Text('LOGIN'),
+                  : const Text('PRISIJUNGTI'),
             ),
           ],
         ),

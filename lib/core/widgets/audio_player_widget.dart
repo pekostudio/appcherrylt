@@ -106,7 +106,7 @@ class AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                         icon: const Icon(Icons.keyboard_arrow_down),
                         iconSize: 36, // Set the size of the icon
                         onPressed: _toggleExpand, // Collapse the container
-                        tooltip: "Close",
+                        tooltip: "Uždaryti",
                       ),
                     ),
                   ),

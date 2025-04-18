@@ -40,11 +40,11 @@ class CustomBottomSheetState extends State<CustomBottomSheet> {
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: Text(
-            'Confirm Logout',
+            'Atsijungti',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           content: Text(
-            'Are you sure you want to log out?',
+            'Ar tikrai norite atsijungti?',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           actions: [
@@ -53,7 +53,7 @@ class CustomBottomSheetState extends State<CustomBottomSheet> {
                 Navigator.of(dialogContext).pop();
               },
               child: Text(
-                'Cancel',
+                'Nutraukti',
                 style: TextStyle(color: Theme.of(context).colorScheme.primary),
               ),
             ),
@@ -64,7 +64,7 @@ class CustomBottomSheetState extends State<CustomBottomSheet> {
                 await _performLogout();
               },
               child: Text(
-                'Logout',
+                'Atsijungti',
                 style: TextStyle(color: Theme.of(context).colorScheme.primary),
               ),
             ),
@@ -146,7 +146,7 @@ class CustomBottomSheetState extends State<CustomBottomSheet> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'version 1.5.5',
+                'versija 1.5.4',
                 style: TextStyle(
                   fontSize: 12,
                 ),
