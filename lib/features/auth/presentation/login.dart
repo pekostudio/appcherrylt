@@ -63,7 +63,7 @@ class LoginPage extends StatelessWidget {
                       onPressed: () =>
                           _launchUrl('https://cherrymusic.lt/registruotis/'),
                       child: Text(
-                        'Sukūrti naują paskyrą',
+                        'Kūrti naują paskyrą',
                         style: GoogleFonts.radioCanada(
                           fontSize: 14,
                           fontWeight: FontWeight.normal,
