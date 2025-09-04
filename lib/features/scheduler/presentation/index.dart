@@ -11,6 +11,8 @@ import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 import 'package:logger/logger.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:appcherrylt/core/services/background_service.dart';
 
 class SchedulerPage extends StatefulWidget {
   const SchedulerPage({super.key});
@@ -24,6 +26,7 @@ class SchedulerPageState extends State<SchedulerPage> {
   final Logger logger = Logger();
   Timer? _refreshTimer;
   bool _hasRedirected = false;
+  StreamSubscription? _bgSharedPrefsCheckSubscription;
 
   @override
   void initState() {
@@ -45,8 +48,48 @@ class SchedulerPageState extends State<SchedulerPage> {
       _checkPlaylistEnd();
     });
 
-    // Initial check
+    // Also set up a timer to check shared preferences for background scheduler updates
+    _bgSharedPrefsCheckSubscription =
+        Stream.periodic(const Duration(seconds: 10))
+            .listen((_) => _checkBackgroundSchedulerAlerts());
+
+    // Initial checks
     _checkPlaylistEnd();
+    _checkBackgroundSchedulerAlerts();
+
+    // Ensure background schedule checker is running
+    BackgroundService.startPeriodicScheduleCheck();
+  }
+
+  Future<void> _checkBackgroundSchedulerAlerts() async {
+    if (!mounted) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasActiveSchedule = prefs.getBool('has_active_schedule') ?? false;
+
+      if (hasActiveSchedule) {
+        final playlistId = prefs.getInt('active_playlist_id');
+        final playlistName = prefs.getString('active_playlist_name');
+
+        if (playlistId != null) {
+          logger.d(
+              'Background service found active playlist: $playlistId - $playlistName');
+
+          final audioProvider =
+              Provider.of<AudioProvider>(context, listen: false);
+
+          // If we're not already playing this playlist, start it
+          if (!audioProvider.isPlaying ||
+              audioProvider.currentPlaylistId != playlistId) {
+            // Navigate to the music page to play the scheduled playlist
+            _navigateToMusicPage(playlistId, isScheduled: true);
+          }
+        }
+      }
+    } catch (e) {
+      logger.e('Error checking background scheduler alerts: $e');
+    }
   }
 
   void _checkPlaylistEnd() {
@@ -142,6 +185,7 @@ class SchedulerPageState extends State<SchedulerPage> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _bgSharedPrefsCheckSubscription?.cancel();
     _audioPlayer.dispose();
 
     // Remove Provider access from dispose
@@ -271,70 +315,78 @@ class SchedulerPageState extends State<SchedulerPage> {
     }
   }
 
-  void _navigateToMusicPage(int? playlistId,
-      {required bool isScheduled}) async {
-    if (playlistId == null) return;
+  void _navigateToMusicPage(int playlistId, {required bool isScheduled}) async {
+    if (!mounted) return;
 
     final userSession = Provider.of<UserSession>(context, listen: false);
     final getPlaylists = Provider.of<GetPlaylists>(context, listen: false);
     final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+    final schedulerProvider =
+        Provider.of<SchedulerProvider>(context, listen: false);
     final favoriteManager =
         Provider.of<FavoriteManager>(context, listen: false);
 
-    try {
-      await audioProvider.stop();
+    // If we need to fetch playlists
+    if (getPlaylists.playlists == null || getPlaylists.playlists!.isEmpty) {
+      await getPlaylists.fetchTracks(userSession.globalToken, favoriteManager);
+    }
 
-      // First try to load playlists if not loaded
-      if (getPlaylists.playlists == null || getPlaylists.playlists!.isEmpty) {
+    // Find the playlist from the list
+    var foundPlaylist = getPlaylists.playlists?.firstWhere(
+      (p) => p["id"] == playlistId,
+      orElse: () => null,
+    );
+
+    // If playlist not found, try to get it from API directly
+    if (foundPlaylist == null) {
+      try {
+        // You'll need to implement a method to fetch a single playlist if not already available
         await getPlaylists.fetchTracks(
             userSession.globalToken, favoriteManager);
-      }
-
-      final playlistDetails = await getPlaylists.fetchPlaylistDetails(
-          playlistId, userSession.globalToken);
-
-      if (!mounted) return;
-
-      if (playlistDetails != null) {
-        audioProvider.setPlaylistDetails(
-          playlistDetails['id'],
-          playlistDetails['title'],
-          playlistDetails['cover'],
-          isScheduled: true,
+        foundPlaylist = getPlaylists.playlists?.firstWhere(
+          (p) => p["id"] == playlistId,
+          orElse: () => null,
         );
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MusicPage(
-              id: playlistDetails['id'],
-              name: playlistDetails['name'],
-              title: playlistDetails['title'],
-              description: playlistDetails['description'],
-              cover: playlistDetails['cover'],
-              categoryId: playlistDetails['category_id'],
-              categoryName: playlistDetails['category_name'],
-              labelNew: playlistDetails['label_new'],
-              labelUpdated: playlistDetails['label_updated'],
-              playlistId: playlistDetails['id'],
-              favorite: true,
-              autoplay: true,
-            ),
-          ),
-        );
-      } else {
-        throw Exception('Failed to fetch playlist details: Playlist not found');
-      }
-    } catch (e) {
-      logger.e('Error fetching playlist details: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading playlist: ${e.toString()}'),
-            duration: const Duration(seconds: 3),
-          ),
-        );
+      } catch (e) {
+        logger.e('Error fetching playlist: $e');
       }
     }
+
+    if (foundPlaylist == null) {
+      logger.e('Could not find playlist with ID: $playlistId');
+      return;
+    }
+
+    // Set this flag so we know we're navigating
+    schedulerProvider.setNavigatingToScheduledPlaylist(true);
+
+    audioProvider.setPlaylistDetails(
+      playlistId,
+      foundPlaylist['title'] ?? 'Unknown Playlist',
+      foundPlaylist['cover'] ?? '',
+      isScheduled: isScheduled,
+    );
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MusicPage(
+          id: playlistId,
+          name: foundPlaylist['name'] ?? '',
+          title: foundPlaylist['title'] ?? 'Unknown Playlist',
+          description: foundPlaylist['description'] ?? '',
+          cover: foundPlaylist['cover'] ?? '',
+          categoryId: foundPlaylist['category_id'] ?? 0,
+          categoryName: foundPlaylist['category_name'] ?? '',
+          labelNew: foundPlaylist['label_new'] ?? '',
+          labelUpdated: foundPlaylist['label_updated'] ?? '',
+          playlistId: playlistId,
+          favorite: favoriteManager.isFavorite(playlistId),
+          autoplay: true,
+        ),
+      ),
+    );
   }
 }

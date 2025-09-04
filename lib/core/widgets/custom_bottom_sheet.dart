@@ -1,7 +1,9 @@
 import 'package:appcherrylt/core/providers/audio_provider.dart';
 import 'package:flutter/material.dart';
-import 'package:appcherrylt/features/auth/presentation/login.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:appcherrylt/core/models/user_session.dart';
+import 'package:appcherrylt/core/services/background_audio_handler.dart';
 
 class CustomBottomSheet extends StatefulWidget {
   final String text1;
@@ -75,18 +77,36 @@ class CustomBottomSheetState extends State<CustomBottomSheet> {
   }
 
   Future<void> _performLogout() async {
-    // Stop the audio player
-    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
-    audioProvider.stop();
+    // Stop any audio playback
+    try {
+      final audioProvider = Provider.of<AudioProvider>(context, listen: false);
+      await audioProvider.stop();
+      await audioProvider.reset(); // fully release audio pipeline
+    } catch (_) {}
 
-    // Check if the widget is still mounted before navigating
-    if (mounted) {
-      // Navigate to the login page
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => LoginPage()),
-      );
-    }
+    // Stop background handler playback as well
+    try {
+      await BackgroundAudioHandler.stop();
+    } catch (_) {}
+
+    // Clear in-memory session token
+    try {
+      Provider.of<UserSession>(context, listen: false).setGlobalToken('');
+    } catch (_) {}
+
+    // Clear persisted credentials and remember flag
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('access_token');
+    await prefs.setBool('remember_me', false);
+
+    // Optional: clear any active schedule flags
+    await prefs.remove('active_playlist_id');
+    await prefs.remove('active_playlist_name');
+    await prefs.remove('has_active_schedule');
+
+    // Navigate to login and clear back stack
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, 'login', (route) => false);
   }
 
   @override
@@ -146,7 +166,7 @@ class CustomBottomSheetState extends State<CustomBottomSheet> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'versija 1.5.4',
+                'versija 1.5.6',
                 style: TextStyle(
                   fontSize: 12,
                 ),

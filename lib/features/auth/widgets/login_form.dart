@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:appcherrylt/api/api.dart';
 import 'package:appcherrylt/core/models/user_session.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class LoginForm extends StatefulWidget {
   final GlobalKey<FormState> formKey;
@@ -20,6 +22,22 @@ class LoginFormState extends State<LoginForm> {
   final TextEditingController _passwordController = TextEditingController();
   bool _obscureText = true;
   bool _isLoading = false;
+  bool _rememberMe = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRememberMe();
+  }
+
+  Future<void> _loadRememberMe() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getBool('remember_me') ?? false;
+    if (!mounted) return;
+    setState(() {
+      _rememberMe = saved;
+    });
+  }
 
   @override
   void dispose() {
@@ -97,7 +115,29 @@ class LoginFormState extends State<LoginForm> {
                 return null;
               },
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Checkbox(
+                  value: _rememberMe,
+                  onChanged: (value) {
+                    setState(() {
+                      _rememberMe = value ?? false;
+                    });
+                  },
+                ),
+                Text(
+                  'Prisiminti mane',
+                  style: GoogleFonts.radioCanada(
+                    fontSize: 14,
+                    fontWeight: FontWeight.normal,
+                    letterSpacing: -0.5,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _isLoading
                   ? null
@@ -156,6 +196,11 @@ class LoginFormState extends State<LoginForm> {
         }
         return;
       }
+
+      // Save token in shared preferences for background service
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('access_token', token);
+      await prefs.setBool('remember_me', _rememberMe);
 
       Provider.of<UserSession>(context, listen: false).setGlobalToken(token);
       Navigator.pushReplacementNamed(context, 'index');

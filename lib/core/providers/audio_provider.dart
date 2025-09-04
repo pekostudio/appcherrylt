@@ -32,7 +32,7 @@ class AudioProvider extends ChangeNotifier {
   final AudioPlayer _player = AudioPlayer(
     handleInterruptions: true,
     androidApplyAudioAttributes: true,
-    androidOffloadSchedulingEnabled: true,
+    // androidOffloadSchedulingEnabled: true, // Deprecated - removing for now
   );
   // Audio state
   bool _isPlaying = false;
@@ -194,8 +194,8 @@ class AudioProvider extends ChangeNotifier {
       BuildContext context, String coverUrl) async {
     List<AudioSource> audioSources = [];
 
-    // Load first five tracks initially instead of just two
-    int tracksToLoad = 5;
+    // Load only the first track initially to start playback faster
+    int tracksToLoad = 1;
     logger.d(
         "Loading initial $tracksToLoad tracks from playlist of ${_tracks.length} tracks");
 

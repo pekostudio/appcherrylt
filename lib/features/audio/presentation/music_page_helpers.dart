@@ -11,7 +11,7 @@ Future<void> populatePlaylist(
   final audioProvider = Provider.of<AudioProvider>(context, listen: false);
 
   try {
-    // Wait for any existing audio operations to complete
+    // Wait for any existing audio operations to complete and ensure a clean state
     await audioProvider.stop();
 
     final tracks = await Provider.of<GetTracks>(context, listen: false)
@@ -22,14 +22,6 @@ Future<void> populatePlaylist(
     if (tracks.isNotEmpty) {
       // Create a new shuffled list instead of modifying the original
       final shuffledTracks = List.from(tracks)..shuffle(Random());
-
-      try {
-        // Initialize the audio source before setting playlist
-        await audioProvider.initializeAudioSource();
-      } catch (e) {
-        logger.e('Error initializing audio source: $e');
-        throw Exception('Failed to initialize audio player');
-      }
 
       if (!context.mounted) return;
 
