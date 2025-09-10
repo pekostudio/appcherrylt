@@ -130,7 +130,7 @@ class CustomBottomSheetState extends State<CustomBottomSheet> {
               ),
               Switch(
                 value: _switchValue,
-                activeColor: Colors.red,
+                activeThumbColor: Colors.red,
                 onChanged: (value) {
                   setState(() {
                     _switchValue = value;
