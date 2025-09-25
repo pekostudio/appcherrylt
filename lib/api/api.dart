@@ -34,7 +34,6 @@ class API {
         var data = jsonDecode(response.body);
         if (data['error'] == null) {
           String accessToken = data['data']['access_token'];
-          //print('Access Token: $accessToken');
           return accessToken;
         } else {
           logger.d('Error from API: ${data['error']['message']}');
@@ -70,7 +69,6 @@ class API {
         var data = jsonDecode(response.body);
         if (data['error'] == null) {
           List<dynamic> tracks = data['data'];
-          //print('Tracks: $tracks');
           return tracks;
         } else {
           logger.d('Error from API: ${data['error']['message']}');
@@ -139,7 +137,7 @@ class API {
         throw Exception('Failed to load favorite status');
       }
     } catch (e) {
-      return false; // Handle error or throw an exception as needed
+      return false;
     }
   }
 
@@ -200,6 +198,4 @@ class API {
     }
     return null;
   }
-
-  // Add more methods for other endpoints
 }
